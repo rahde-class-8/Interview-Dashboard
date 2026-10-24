@@ -17,14 +17,15 @@ type CallRow = Row<"recruiter_calls"> & {
   // PostgREST returns this as an array: the unique index is on recruiter_call_id alone while
   // the foreign key is composite, so the relationship is not detected as one-to-one.
   follow_up: FollowUpEmbed[] | FollowUpEmbed | null;
-  recordings: { count: number }[];
+  recording_count: number;
 };
 
 const RELATIONS = [
   "opportunity:opportunities!recruiter_calls_opportunity_id_workspace_id_fkey(id, title, stage, company:companies!opportunities_company_id_workspace_id_fkey(id, name))",
   "recruiter:recruiters!recruiter_calls_recruiter_id_workspace_id_fkey(id, name, email, phone, agency)",
   "follow_up:follow_up_tasks!follow_up_tasks_recruiter_call_id_workspace_id_fkey(id, title, due_date, completed_at)",
-  "recordings!recordings_recruiter_call_id_workspace_id_fkey(count)",
+  // Uploaded (playable) recordings only; see public.uploaded_recording_count.
+  "recording_count:uploaded_recording_count",
 ].join(", ");
 
 /** A UUID no row has: used to express "match nothing" in filters. */
@@ -54,7 +55,7 @@ export function toCallSummary(row: CallRow): CallSummary {
     },
     recruiter: row.recruiter,
     followUp: toFollowUpSummary(Array.isArray(row.follow_up) ? row.follow_up[0] : row.follow_up),
-    recordingCount: row.recordings?.[0]?.count ?? 0,
+    recordingCount: row.recording_count ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -135,7 +136,6 @@ const summaries = crud({
     return resolved;
   },
   applyList: (query, params, resolved) => {
-    query = query.neq("recordings.status", "deleted");
     if (params.opportunityId) query = query.eq("opportunity_id", params.opportunityId);
     if (params.recruiterId) query = query.eq("recruiter_id", params.recruiterId);
     if (params.from) query = query.gte("call_at", params.from);

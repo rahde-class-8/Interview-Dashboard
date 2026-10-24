@@ -51,9 +51,14 @@ rows created while you page can shift results by one.
 | 404 | `not_found` | Unknown id, or a workspace the caller is not a member of (no existence leak) |
 | 409 | `conflict` | Unique constraint (e.g. company name already exists) |
 | 409 | `in_use` | Delete blocked because other records reference the row |
-| 413 | `payload_too_large` | Body > 1 MB |
+| 409 | `quota_exceeded` | Workspace storage quota or the per-call recording limit reached |
+| 409 | `upload_incomplete` | Recording `complete` called before the file reached Storage |
+| 413 | `payload_too_large` | Body > 1 MB, or a recording above the size limit |
 | 415 | `unsupported_media_type` | Mutation body not `application/json` |
+| 422 | `invalid_recording` | Uploaded file failed verification (size, type or audio signature) |
+| 429 | `rate_limited` | Too many upload starts or playback URLs in the current hour |
 | 500 | `internal_error` | Unexpected; logged server-side with the `requestId` (no internals returned) |
+| 503 | `storage_unavailable` | File storage could not be reached; retry |
 
 ### 1.2 Roles
 
@@ -210,9 +215,45 @@ Body (create):
 
 Response `Call` (detail): summary fields plus `hiringManagerPriorities, interviewStages, recruiterAdvice, behavioralThemes, redFlags, candidateQuestions, notes`.
 Summary (`CallSummary`): `{ id, workspaceId, callAt, durationMinutes, interestLevel, technicalTopics, opportunity: { id, title, stage, company: { id, name } }, recruiter: { id, name, email, phone, agency } | null, followUp: { id, title, dueDate, completed } | null, recordingCount, createdAt, updatedAt }`.
+`recordingCount` counts **uploaded** (playable) recordings only.
 
 Errors: unknown/foreign `opportunity.id` or `recruiter.id` → `404` (and **nothing** from the request is saved);
 invalid fields → `400` with `details`.
+
+### 7.1 Recordings
+
+Audio files are stored in private object storage; see [STORAGE.md](STORAGE.md) for the
+full upload flow, limits, retention and troubleshooting. The API never streams audio itself.
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| GET | `/calls/{id}/recordings` | viewer | List a call's recordings. Query: `status` = `active` (default: all but deleted) \| `uploaded` \| `pending` \| `failed`, `limit`, `cursor` |
+| POST | `/calls/{id}/recordings` | editor | Start an upload → `201 { recording, upload }` |
+| GET | `/recordings/{id}` | viewer | Recording metadata (deleted → `404`) |
+| PATCH | `/recordings/{id}` | editor | `{ durationSeconds: 0–86400 \| null }` |
+| DELETE | `/recordings/{id}` | owner, or the editor who uploaded it | Soft delete + immediate object removal → `204` |
+| POST | `/recordings/{id}/upload-url` | the uploader | Fresh upload URL for a `pending` recording (`409` otherwise) |
+| POST | `/recordings/{id}/complete` | the uploader | Verify the stored file → `200 Recording` (`uploaded`); body `{ durationSeconds? }` |
+| GET | `/recordings/{id}/playback-url` | owner, editor | `{ url, expiresAt }`, a 5-minute signed URL (`409` unless `uploaded`) |
+
+Start-upload body:
+
+| Field | Rules |
+| --- | --- |
+| `fileName` | 1–255 chars, extension `.mp3`, `.m4a` or `.wav` (case-insensitive) |
+| `fileSize` | integer bytes > 0, ≤ limit (default 100 MiB) else `413` |
+| `mimeType` | optional browser-reported type; must match the extension (see STORAGE.md §2) |
+| `consentConfirmed` | must be `true` |
+
+`upload`: `{ signedUrl, token, path, contentType, maxBytes, expiresAt }`. PUT the file to
+`signedUrl` with `Content-Type: contentType` within 2 hours, then call `complete`.
+
+`Recording`: `{ id, workspaceId, callId, uploadedBy, fileName, mimeType, fileSize,
+durationSeconds, status: pending|uploaded|failed, failureReason, consentConfirmedAt,
+uploadedAt, deleteAfter, createdAt, updatedAt }`.
+
+Limits: 30 upload starts/renewals and 120 playback URLs per user per hour (`429`),
+2 GiB per workspace and 10 recordings per call (`409 quota_exceeded`).
 
 ## 8. Interviews
 
@@ -277,6 +318,11 @@ Response `FollowUp`: `{ id, workspaceId, opportunityId, callId, title, dueDate, 
   filters, so user input cannot change the filter expression (tested with injection strings).
 - **Workspace creation** inserts with a server-generated id and reads the row back, because
   `INSERT … RETURNING` is checked against the SELECT policy before the owner membership exists.
+- **Recordings** use a server-only secret-key client (`src/server/core/supabase/admin.ts`)
+  only for signed Storage URLs and status transitions, always after the caller's role was
+  checked with the user's own (RLS-bound) client.
+- **Internal jobs** live under `/api/internal/jobs/*`, authenticated with `CRON_SECRET`
+  (not user sessions) and are not part of this API (see STORAGE.md §7).
 - **Types:** `src/server/core/database.types.ts` is generated (`npm run db:types`); regenerate
   after schema changes.
 

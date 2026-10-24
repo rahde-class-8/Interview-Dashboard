@@ -10,7 +10,7 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 | 2 — Database architecture | **Complete** | Migrations and relationship tests pass |
 | 3 — Authentication and authorization | **Complete** | RLS and permission tests pass |
 | 4 — Application services | **Complete** | Core CRUD operations work |
-| 5 — Recording storage | Not Started | Authorized uploads and playback work |
+| 5 — Recording storage | **Complete** | Authorized uploads and playback work ✅ |
 | 6 — Collaboration | Not Started | Role-based sharing is enforced |
 | 7 — Frontend integration | Not Started | Frontend workflows persist real data |
 | 8 — Testing and QA | Not Started | Critical security tests pass |
@@ -432,3 +432,112 @@ Phase 5 — Audio recording storage: private `recordings` bucket (size/MIME limi
 init with signed upload URLs, completion with size + magic-byte verification, owner/editor
 playback via 5-minute signed URLs, soft delete, cleanup-queue purge and abandoned-upload jobs,
 retention, and `docs/backend/STORAGE.md`.
+
+---
+
+## Phase 5 — Recording Storage
+
+**Status:** Complete (2026-10-24). Gate "authorized uploads and playback work": ✅
+(pgTAP 449/449, Vitest 81/81, Playwright 41/41 — 37 API + 4 browser).
+
+### Completed tasks
+
+- **Private bucket** `recordings` created by migration: `public = false`, 100 MiB limit,
+  MIME types `audio/mpeg`, `audio/mp4`, `audio/wav` only. **No `storage.objects` policies**,
+  so clients (even owners with a valid session) cannot list, download, upload, overwrite or
+  delete objects; access is only via server-issued signed URLs. Local global Storage limit
+  raised to 100 MiB (`supabase/config.toml`).
+- **Upload flow**: `POST /calls/{id}/recordings` (editor+, consent required, extension/MIME/
+  size checks, server-generated path, Postgres-backed rate limit 30/h) → one-time, path-bound
+  signed upload URL (2 h, no overwrite) → browser uploads directly to Storage →
+  `POST /recordings/{id}/complete` verifies existence, size, content type and audio signature
+  (MP3/M4A/WAV magic bytes via a ranged read) before the recording becomes `uploaded`;
+  invalid files are removed and the recording marked `failed` (`422`).
+- **Interrupted/failed uploads**: `409 upload_incomplete`, `POST /recordings/{id}/upload-url`
+  renewal, idempotent `complete`, quota released on failures; abandoned uploads (> 24 h)
+  failed and purged by the maintenance job.
+- **Playback**: `GET /recordings/{id}/playback-url` for owner/editor only (D4), uploaded
+  recordings only, 5-minute signed URL, `Cache-Control: no-store`, 120/h rate limit.
+- **Deletion**: owner or the uploading editor; soft delete + cleanup queue in one
+  transaction, immediate object removal with queue fallback; tombstones purged after 30 days.
+- **Limits** (configurable): 100 MiB/file (`NEXT_PUBLIC_MAX_RECORDING_SIZE_MB` can lower it;
+  DB + bucket cap), 2 GiB/workspace (`storage_quota_bytes`), 10 recordings/call — quota and
+  count enforced by a DB trigger for every insert path, serialized per workspace.
+- **Retention**: `delete_after` from the workspace setting (30/90/180/365 days or keep);
+  changing the setting re-applies to existing recordings; due recordings deleted by the job.
+- **Maintenance job** `POST /api/internal/jobs/recording-maintenance` (Bearer `CRON_SECRET`,
+  constant-time compare, disabled when unset): abandoned uploads, retention, orphan
+  reconciliation (objects without a live recording), tombstone/queue/counter purge, then
+  queue draining with `FOR UPDATE SKIP LOCKED` claims and retries.
+- **Status guard** trigger (no backwards transitions), service-only transition functions,
+  `RecordingStorage` interface (Supabase implementation; replaceable), server-only admin client.
+- `recordingCount` on calls now counts uploaded recordings only (computed field).
+- **Docs**: created `docs/backend/STORAGE.md`; updated `API.md` (§7.1, error codes),
+  `DATABASE.md`, `AUTHENTICATION.md`, `ENVIRONMENT.md` (`CRON_SECRET`), `ARCHITECTURE.md`.
+
+### Files created or modified
+
+- Created: `supabase/migrations/20261024200000_recording_storage.sql`,
+  `supabase/tests/database/009_recording_storage.test.sql`,
+  `src/server/core/{rate-limit.ts,supabase/admin.ts}`,
+  `src/server/recordings/{config,formats,storage,recordings,maintenance}.ts`,
+  `src/shared/contracts/recordings.ts`,
+  `src/app/api/v1/workspaces/[workspaceId]/calls/[id]/recordings/route.ts`,
+  `src/app/api/v1/workspaces/[workspaceId]/recordings/[id]/{route,upload-url/route,complete/route,playback-url/route}.ts`,
+  `src/app/api/internal/jobs/recording-maintenance/route.ts`,
+  `tests/api/recordings.spec.ts`, `tests/unit/recordings.test.ts`, `docs/backend/STORAGE.md`.
+- Modified: `supabase/config.toml` (100 MiB), `src/server/recruitment/calls.ts`
+  (uploaded-only count), `src/shared/contracts/common.ts` (error codes),
+  `src/server/core/database.types.ts` (regenerated), `scripts/write-local-env.mjs`
+  (generates `CRON_SECRET`), `.env.example`, `tests/api/helpers.ts`,
+  `supabase/tests/database/{001_schema,006_rls_matrix}.test.sql` (new table), docs.
+
+### Database migrations
+
+| Migration | Applied locally |
+| --- | --- |
+| `20261024200000_recording_storage` | ✅ |
+
+### Tests executed and results
+
+| Suite | Result |
+| --- | --- |
+| `npm run test:db` (9 files) | ✅ 449/449 (new: 46 storage assertions) |
+| `npm run test` (unit + HTTP integration) | ✅ 81/81 (new: 8 unit) |
+| `npx playwright test` (api + chromium) | ✅ 41/41 (new: 9 API, real uploads through signed URLs) |
+| `npm run lint`, `npx tsc --noEmit`, `npm run build`, `supabase db lint` | ✅ |
+| Secret scan (client bundle, repo files; secret key and cron secret) | ✅ 0 matches |
+
+Security cases covered by tests: viewer/commenter playback and upload denied, non-member
+`404`, direct Storage download/list/sign/upload/remove with a signed-in owner session denied,
+public URL denied, upload token bound to its path and unable to overwrite, fake/mismatched
+files rejected and removed, quota/rate limits, job secret required (user session rejected).
+
+Defects found by the tests and fixed:
+
+1. `rate_limit_counters` used a composite primary key, breaking the "uuid keys" schema rule
+   → uuid id + unique key.
+2. `app.cleanup_reason` leaked to later statements in the same transaction (queued a soft
+   delete as `failed_validation`) → reset after use; `PERFORM` reset `FOUND` before the
+   check → reordered.
+
+### Outstanding issues
+
+- No schedule exists yet for the maintenance job (Phase 9, needs approval): until then
+  abandoned uploads, retention and deferred removals wait; user deletions are immediate.
+- The audio check verifies the container signature, not decodability.
+- Frontend still uses in-memory previews (Phase 7 wires upload/playback, consent checkbox,
+  progress and retention warning).
+- Hosted projects must set the global Storage limit ≥ 100 MiB.
+
+### Architectural decisions
+
+- Direct browser → Storage uploads with path-bound signed URLs (no audio through Next.js).
+- Limits enforced in the database (trigger) so every insert path is covered.
+- One combined maintenance job instead of four; rate limits in Postgres (works across instances).
+- Retention changes apply to existing recordings (documented; UI warning in Phase 7).
+
+### Next phase
+
+Phase 6 — Collaboration (shared notes, comments, activity events, Realtime) — awaiting approval.
+

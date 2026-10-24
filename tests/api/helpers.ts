@@ -6,7 +6,7 @@ const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PUBLISHABLE = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const SECRET = process.env.SUPABASE_SECRET_KEY!;
 export const BASE_URL = "http://localhost:3000";
-const PASSWORD = "apiTests2026";
+export const PASSWORD = "apiTests2026";
 
 if (!URL_ || !PUBLISHABLE || !SECRET) {
   throw new Error("Local Supabase is not configured. Run `npm run supabase:start` and `npm run env:local`.");

@@ -245,6 +245,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"rate_limit_counters": {
+                  Row: {
+                    "action": string,"hits": number,"subject": string,"window_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"hits"?: number,"subject": string,"window_start": string
+                  }
+                  Update: {
+                    "action"?: string,"hits"?: number,"subject"?: string,"window_start"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"recordings": {
                   Row: {
                     "consent_confirmed_at": string,"created_at": string,"delete_after": string | null,"deleted_at": string | null,"duration_seconds": number | null,"failure_reason": string | null,"file_name": string,"file_size": number,"id": string,"mime_type": string,"recruiter_call_id": string,"status": string,"storage_path": string,"updated_at": string,"uploaded_at": string | null,"uploaded_by": string | null,"workspace_id": string
@@ -273,9 +287,9 @@ isOneToOne: false
                   ]
                 },"recruiter_calls": {
                   Row: {
-                    "behavioral_themes": (string)[],"call_at": string,"candidate_questions": NonNullable<Json>,"created_at": string,"created_by": string | null,"duration_minutes": number,"hiring_manager_priorities": (string)[],"id": string,"interest_level": number,"interview_stages": (string)[],"notes": string,"opportunity_id": string,"recruiter_advice": string,"recruiter_id": string | null,"red_flags": (string)[],"technical_topics": (string)[],"updated_at": string,"workspace_id": string
+                    "behavioral_themes": (string)[],"call_at": string,"candidate_questions": NonNullable<Json>,"created_at": string,"created_by": string | null,"duration_minutes": number,"hiring_manager_priorities": (string)[],"id": string,"interest_level": number,"interview_stages": (string)[],"notes": string,"opportunity_id": string,"recruiter_advice": string,"recruiter_id": string | null,"red_flags": (string)[],"technical_topics": (string)[],"updated_at": string,"workspace_id": string,"uploaded_recording_count": number | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "uploaded_recording_count"
                   Insert: {
                     "behavioral_themes"?: (string)[],"call_at": string,"candidate_questions"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"duration_minutes": number,"hiring_manager_priorities"?: (string)[],"id"?: string,"interest_level": number,"interview_stages"?: (string)[],"notes"?: string,"opportunity_id": string,"recruiter_advice"?: string,"recruiter_id"?: string | null,"red_flags"?: (string)[],"technical_topics"?: (string)[],"updated_at"?: string,"workspace_id": string
                   }
@@ -401,14 +415,14 @@ isOneToOne: false
                   ]
                 },"storage_cleanup_queue": {
                   Row: {
-                    "attempts": number,"bucket": string,"completed_at": string | null,"enqueued_at": string,"id": string,"last_error": string | null,"reason": string,"storage_path": string,"workspace_id": string
+                    "attempts": number,"bucket": string,"completed_at": string | null,"enqueued_at": string,"id": string,"last_error": string | null,"locked_until": string | null,"reason": string,"storage_path": string,"workspace_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "attempts"?: number,"bucket": string,"completed_at"?: string | null,"enqueued_at"?: string,"id"?: string,"last_error"?: string | null,"reason": string,"storage_path": string,"workspace_id": string
+                    "attempts"?: number,"bucket": string,"completed_at"?: string | null,"enqueued_at"?: string,"id"?: string,"last_error"?: string | null,"locked_until"?: string | null,"reason": string,"storage_path": string,"workspace_id": string
                   }
                   Update: {
-                    "attempts"?: number,"bucket"?: string,"completed_at"?: string | null,"enqueued_at"?: string,"id"?: string,"last_error"?: string | null,"reason"?: string,"storage_path"?: string,"workspace_id"?: string
+                    "attempts"?: number,"bucket"?: string,"completed_at"?: string | null,"enqueued_at"?: string,"id"?: string,"last_error"?: string | null,"locked_until"?: string | null,"reason"?: string,"storage_path"?: string,"workspace_id"?: string
                   }
                   Relationships: [
                     
@@ -502,11 +516,117 @@ isOneToOne: false
               "role": string,"workspace_id": string
             }[]
                            },
+"claim_storage_cleanup":
+{ Args: { "p_limit"?: number }; Returns: {
+              "attempts": number,
+"bucket": string,
+"completed_at": string | null,
+"enqueued_at": string,
+"id": string,
+"last_error": string | null,
+"locked_until": string | null,
+"reason": string,
+"storage_path": string,
+"workspace_id": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "storage_cleanup_queue"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
+"consume_rate_limit":
+{ Args: { "p_action": string,"p_limit": number,"p_subject": string,"p_window_seconds": number }; Returns: boolean
+                           },
+"mark_recording_failed":
+{ Args: { "p_cleanup_reason"?: string,"p_id": string,"p_reason": string }; Returns: {
+              "consent_confirmed_at": string,
+"created_at": string,
+"delete_after": string | null,
+"deleted_at": string | null,
+"duration_seconds": number | null,
+"failure_reason": string | null,
+"file_name": string,
+"file_size": number,
+"id": string,
+"mime_type": string,
+"recruiter_call_id": string,
+"status": string,
+"storage_path": string,
+"updated_at": string,
+"uploaded_at": string | null,
+"uploaded_by": string | null,
+"workspace_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "recordings"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"mark_recording_uploaded":
+{ Args: { "p_id": string }; Returns: {
+              "consent_confirmed_at": string,
+"created_at": string,
+"delete_after": string | null,
+"deleted_at": string | null,
+"duration_seconds": number | null,
+"failure_reason": string | null,
+"file_name": string,
+"file_size": number,
+"id": string,
+"mime_type": string,
+"recruiter_call_id": string,
+"status": string,
+"storage_path": string,
+"updated_at": string,
+"uploaded_at": string | null,
+"uploaded_by": string | null,
+"workspace_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "recordings"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"run_recording_maintenance":
+{ Args: { "p_abandon_after"?: string,"p_tombstone_after"?: string }; Returns: Json
+                           },
 "save_opportunity":
 { Args: { "p_opportunity_id": string,"p_payload": Json,"p_workspace_id": string }; Returns: string
                            },
 "save_recruiter_call":
 { Args: { "p_call_id": string,"p_payload": Json,"p_workspace_id": string }; Returns: Json
+                           },
+"soft_delete_recording":
+{ Args: { "p_id": string }; Returns: {
+              "consent_confirmed_at": string,
+"created_at": string,
+"delete_after": string | null,
+"deleted_at": string | null,
+"duration_seconds": number | null,
+"failure_reason": string | null,
+"file_name": string,
+"file_size": number,
+"id": string,
+"mime_type": string,
+"recruiter_call_id": string,
+"status": string,
+"storage_path": string,
+"updated_at": string,
+"uploaded_at": string | null,
+"uploaded_by": string | null,
+"workspace_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "recordings"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"uploaded_recording_count":
+{ Args: { "c": Omit<Database["public"]['Tables']["recruiter_calls"]['Row'], Database["public"]['Tables']["recruiter_calls"]['ComputedFields']> }; Returns: number
                            }
           }
           Enums: {

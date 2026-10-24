@@ -62,6 +62,11 @@ export type ApiErrorCode =
   | "in_use"
   | "payload_too_large"
   | "unsupported_media_type"
+  | "quota_exceeded"
+  | "rate_limited"
+  | "invalid_recording"
+  | "upload_incomplete"
+  | "storage_unavailable"
   | "internal_error";
 
 export interface ApiErrorBody {

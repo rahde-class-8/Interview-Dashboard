@@ -302,6 +302,12 @@ sequenceDiagram
 - Limits: configurable `MAX_RECORDING_SIZE_MB` (default 100, mirrored in bucket config); per-workspace quota (default 2 GiB).
 - Interrupted uploads: retry with a fresh upload token while `pending`; pending rows older than 24 h are removed and their objects purged.
 - Deletion: soft-delete row → `storage_cleanup_queue` → purge job (every 5 min); cascades enqueue via trigger; daily reconciliation removes orphans.
+
+> **As implemented (Phase 5):** deletion also removes the object immediately (the queue is
+> the fallback); abandoned pending rows are marked `failed` (tombstones purged after 30 days)
+> rather than deleted; purge, abandoned-upload, retention and orphan reconciliation run in
+> **one** job (`/api/internal/jobs/recording-maintenance`, recommended every 10 minutes);
+> rate limits use Postgres counters (`rate_limit_counters`). Details: [STORAGE.md](STORAGE.md).
 - Retention: optional per-workspace auto-delete (`null` = keep until deleted) — D5.
 - Uploads go directly from browser to Storage, avoiding Vercel's request-body limits.
 - Details → `docs/backend/STORAGE.md` (Phase 5).

@@ -3,6 +3,7 @@
 // `supabase status`. Other variables already in .env.local are preserved.
 // Refuses to write values that do not point at a local Supabase instance.
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const ENV_FILE = ".env.local";
@@ -52,6 +53,13 @@ for (const [key, value] of Object.entries(values)) {
 }
 if (!updated.some((l) => l.startsWith("NEXT_PUBLIC_MAX_RECORDING_SIZE_MB="))) {
   updated.push("NEXT_PUBLIC_MAX_RECORDING_SIZE_MB=100");
+}
+// Secret for /api/internal/jobs/* (generated once per machine; never shared).
+if (!updated.some((l) => /^CRON_SECRET=.{32,}/.test(l))) {
+  const index = updated.findIndex((l) => l.startsWith("CRON_SECRET="));
+  const line = `CRON_SECRET=${randomBytes(32).toString("hex")}`;
+  if (index >= 0) updated[index] = line;
+  else updated.push(line);
 }
 
 writeFileSync(ENV_FILE, updated.filter((l, i, a) => l !== "" || i < a.length - 1).join("\n") + "\n", { mode: 0o600 });

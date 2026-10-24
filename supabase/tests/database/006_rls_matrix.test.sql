@@ -5,7 +5,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(218);
+select plan(219);
 
 -- Users: owner, editor, commenter, viewer of workspace W; outsider owns only W2.
 insert into auth.users (id, email) values

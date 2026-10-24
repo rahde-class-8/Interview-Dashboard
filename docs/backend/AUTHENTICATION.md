@@ -164,6 +164,7 @@ bypasses RLS**. The migration revokes everything and grants explicitly:
 | comments | SELECT; INSERT(workspace_id, note_id, author_id, body); UPDATE(body, edited_at, deleted_at) |
 | activity_events | SELECT |
 | storage_cleanup_queue | none |
+| rate_limit_counters | none (Phase 5) |
 
 `anon` has no privileges on any table. Clients cannot choose primary keys except
 `recordings.id`, which the server generates to build the storage path.
@@ -177,7 +178,7 @@ bypasses RLS**. The migration revokes everything and grants explicitly:
 | workspace_members | member | — (invitation function) | owner; new role ≠ owner | owner, or self (leave) |
 | workspace_invitations | owner | owner, `invited_by = auth.uid()`, status pending | owner: pending → revoked only | — |
 | 10 domain tables | viewer+ | editor+ | editor+ (USING and WITH CHECK) | editor+ |
-| recordings | viewer+ | editor+, `uploaded_by = auth.uid()`, status pending | editor+ (duration only, via grant) | — |
+| recordings | viewer+ | editor+, `uploaded_by = auth.uid()`, status pending (quota/limits trigger) | editor+ (duration only, via grant) | — (status changes and deletion via service-only functions after API role checks; see STORAGE.md) |
 | comments | viewer+ | commenter+, `author_id = auth.uid()` | author (commenter+) or owner; trigger limits owners to `deleted_at` | — |
 | activity_events | viewer+ | — | — | — |
 

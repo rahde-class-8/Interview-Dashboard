@@ -11,7 +11,7 @@ select tables_are(
   array[
     'profiles', 'workspaces', 'workspace_members', 'workspace_invitations',
     'companies', 'recruiters', 'opportunities', 'recruiter_calls',
-    'recordings', 'storage_cleanup_queue',
+    'recordings', 'storage_cleanup_queue', 'rate_limit_counters',
     'interviews', 'questions', 'preparation_tasks', 'follow_up_tasks', 'star_stories',
     'shared_notes', 'comments', 'activity_events'
   ],

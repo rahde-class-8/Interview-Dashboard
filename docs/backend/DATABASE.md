@@ -109,7 +109,10 @@ links regardless of application code. Verified for all 13 child relationships in
 | `app.bump_note_version()` | `shared_notes` | increments `version` on content change; ignores client-set versions |
 | `app.handle_new_user()` | `auth.users` (insert) | creates profile + personal workspace (+ owner membership) |
 | `app.sync_profile_email()` | `auth.users` (email update) | keeps `profiles.email` in sync |
-| `app.enqueue_recording_cleanup()` | `recordings` | queues the object path on soft delete (`user_delete`) or row deletion/cascade (`cascade`) |
+| `app.enqueue_recording_cleanup()` | `recordings` | queues the object path when a live (`pending`/`uploaded`) recording becomes `deleted`/`failed` or its row is deleted (reason from `app.cleanup_reason`, else `user_delete` / `failed_validation` / `cascade`) |
+| `app.guard_recording_status()` | `recordings` | allows only `pending → uploaded/failed/deleted` and `uploaded/failed → deleted` (Phase 5) |
+| `app.enforce_recording_limits()` | `recordings` (insert) | workspace quota (pending + uploaded bytes) and 10 live recordings per call, serialized per workspace (Phase 5) |
+| `app.apply_retention_change()` | `workspaces` (retention update) | recomputes `delete_after` of uploaded recordings (Phase 5) |
 
 All helper functions live in the private `app` schema (not exposed through the Data API),
 pin `search_path = ''`, and are not executable by `anon`.
@@ -127,6 +130,21 @@ All are `SECURITY INVOKER` (RLS and grants apply), run in one transaction, and u
 Covered by `008_services.test.sql` (atomic rollback, find-or-create, partial updates,
 cross-workspace references, permissions).
 
+### 4.5 Recording storage functions (Phase 5, service role only)
+
+| Function | Purpose |
+| --- | --- |
+| `public.mark_recording_uploaded(id)` | `pending → uploaded`, sets `uploaded_at` and the retention deadline |
+| `public.mark_recording_failed(id, reason, cleanup_reason)` | `pending → failed`, queues the object |
+| `public.soft_delete_recording(id)` | any live state `→ deleted`, queues the object |
+| `public.consume_rate_limit(subject, action, limit, window_seconds)` | fixed-window counter in `rate_limit_counters`; returns false over the limit |
+| `public.claim_storage_cleanup(limit)` | claims queue entries (`FOR UPDATE SKIP LOCKED`, 5-minute lease) |
+| `public.run_recording_maintenance(abandon_after, tombstone_after)` | abandoned uploads, retention, orphan reconciliation, tombstone/queue/counter purge |
+| `public.uploaded_recording_count(recruiter_calls)` | computed field for the API (`authenticated`, RLS applies) |
+
+The bucket itself (`storage.buckets` row `recordings`: private, 100 MiB, MP3/M4A/WAV MIME
+types) is created by the same migration; see [STORAGE.md](STORAGE.md).
+
 ## 5. Deletion behavior
 
 | When this is deleted… | Effect |
@@ -138,7 +156,7 @@ cross-workspace references, permissions).
 | opportunity | its calls, interviews, preparation tasks and follow-ups are deleted; recordings of those calls are deleted and queued; shared notes are unlinked |
 | recruiter call | its recordings (queued for purge) and its follow-up are deleted |
 | shared note | its comments are deleted |
-| recording | soft delete (`status='deleted'`) queues the object; hard delete queues it unless already queued |
+| recording | soft delete (`status='deleted'`) queues the object; hard delete queues it unless already queued; tombstones (`failed`/`deleted`) are purged after 30 days |
 
 `NO ACTION` is used instead of `RESTRICT` on `opportunities → companies` so a workspace
 deletion cascades regardless of internal trigger order, while a direct company delete is
@@ -150,7 +168,7 @@ still rejected.
   and functions grant nothing to `PUBLIC`.
 - `authenticated` has explicit least-privilege table and column grants (Supabase's broad
   defaults, including `TRUNCATE`, were revoked in Phase 3). Full table in
-  [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6.2. `storage_cleanup_queue` grants nothing to client roles.
+  [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6.2. `storage_cleanup_queue` and `rate_limit_counters` grant nothing to client roles.
 - Executable by `authenticated`: `app.valid_candidate_questions` (check constraint),
   `app.has_workspace_role` / `app.shares_workspace_with` (policies), `public.accept_invitation`,
   and the Phase 4 write functions. No other `SECURITY DEFINER` function is callable by clients
@@ -169,6 +187,7 @@ still rejected.
 | `20261024180000_authorization.sql` | role helpers, least-privilege grants, RLS policies, `accept_invitation` (Phase 3) |
 | `20261024190000_application_services.sql` | `save_opportunity`, `save_recruiter_call` and helpers (Phase 4) |
 | `20261024191000_workspace_insert_id.sql` | allow the API to supply a new workspace's id (Phase 4) |
+| `20261024200000_recording_storage.sql` | private `recordings` bucket, status guard, quota/limits, retention, rate limits, maintenance functions (Phase 5) |
 
 ### 7.1 Commands
 
@@ -489,11 +508,29 @@ Storage objects awaiting deletion (filled by triggers, drained by a job). Servic
 | `last_error` | text | null |  |
 | `enqueued_at` | timestamptz | not null | `now()` |
 | `completed_at` | timestamptz | null |  |
+| `locked_until` | timestamptz | null |  |
 
 **Indexes**
 
 - `storage_cleanup_queue_pending_idx` (enqueued_at) WHERE (completed_at IS NULL)
 - `storage_cleanup_queue_pkey` (id)
+
+### `rate_limit_counters`
+
+Per-user fixed-window counters for actions that mint signed URLs (Phase 5). Service-only.
+
+| Column | Type | Null | Default |
+| --- | --- | --- | --- |
+| `id` | uuid | not null | `gen_random_uuid()` |
+| `subject` | uuid | not null |  |
+| `action` | text | not null |  |
+| `window_start` | timestamptz | not null |  |
+| `hits` | integer | not null | `0` |
+
+**Indexes**
+
+- `rate_limit_counters_pkey` (id)
+- `rate_limit_counters_subject_action_window_start_key` (subject, action, window_start)
 
 ### `interviews`
 
