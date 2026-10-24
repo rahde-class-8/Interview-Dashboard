@@ -74,24 +74,24 @@ select ok(
 );
 
 select is(
-  (select count(*)::int from pg_proc p
-    where p.pronamespace = 'app'::regnamespace and p.prosecdef
+  (select array_agg(p.proname::text order by p.proname) from pg_proc p
+    where p.pronamespace in ('app'::regnamespace, 'public'::regnamespace) and p.prosecdef
       and has_function_privilege('authenticated', p.oid, 'execute')),
-  0,
-  'authenticated cannot call SECURITY DEFINER helpers directly'
+  array['accept_invitation', 'has_workspace_role', 'shares_workspace_with'],
+  'authenticated can call only the allow-listed SECURITY DEFINER functions'
 );
 
--- Deny by default: an authenticated client sees nothing and cannot write (no policies yet).
+-- A signed-in user who is not a member of a workspace sees nothing in it and cannot write to it.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000a1', 'schema-test@example.com');
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 
-select is((select count(*)::int from public.workspaces), 0, 'authenticated client sees no workspaces without policies');
+select is((select count(*)::int from public.workspaces), 1, 'a user sees only workspaces they belong to (their personal one)');
 select throws_ok(
   $$insert into public.companies (workspace_id, name) values (gen_random_uuid(), 'Nope')$$,
   '42501',
   null,
-  'authenticated client cannot insert rows without a policy'
+  'a user cannot insert into a workspace they do not belong to'
 );
 reset role;
 

@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | **Approved** (D2–D10 as recommended, 2026-10-24). Implemented so far: Phase 1 (local environment), Phase 2 (database). |
+| Status | **Approved** (D2–D10 as recommended, 2026-10-24). Implemented so far: Phase 1 (local environment), Phase 2 (database), Phase 3 (authentication and authorization). |
 | Audited commit | `8c73867` (branch `docs/backend-architecture-plan`; frontend at `80960f1` on `main`) |
 | Supersedes | The earlier planning drafts (`docs/*.md`), removed in Phase 2 per D8; still available in git history (commit `8c73867`). |
 
@@ -111,8 +111,9 @@ flowchart LR
 
 ```
 src/
-├── app/(auth)/login · register · forgot-password · reset-password   # new pages
-├── app/auth/callback/route.ts                                       # email link exchange
+├── app/(auth)/login · register · forgot-password; app/reset-password # auth pages
+├── app/(app)/…                                                      # authenticated pages (layout checks the user)
+├── app/auth/confirm/route.ts                                        # email link verification (token_hash)
 ├── app/api/v1/workspaces/[workspaceId]/...                          # Route Handlers (thin)
 ├── app/api/internal/jobs/...                                        # cron targets
 ├── app/api/health/route.ts                                          # health check
@@ -223,18 +224,18 @@ sequenceDiagram
   participant DB as Postgres
   U->>App: Register (email, password)
   App->>A: signUp
-  A-->>U: Confirmation email
-  U->>App: /auth/callback?code=…
-  App->>A: exchangeCodeForSession
   A->>DB: insert auth.users
   DB->>DB: trigger: profile + personal workspace + owner membership
+  A-->>U: Confirmation email
+  U->>App: /auth/confirm?token_hash=…&type=email
+  App->>A: verifyOtp (marks email confirmed)
   App-->>U: Set HttpOnly session cookies → /
   Note over U,App: Later requests: middleware refreshes session;<br/>server code calls auth.getUser() (never trusts getSession())
 ```
 
-- Register, login, logout, password reset (email link → `/reset-password`), email confirmation required.
-- Sessions: `@supabase/ssr` cookies (`HttpOnly`, `Secure`, `SameSite=Lax`), 1-hour access token, rotating refresh tokens.
-- Protected routes: all app pages except `/login`, `/register`, `/forgot-password`, `/reset-password`, `/auth/callback`, `/api/health`.
+- Register, login, logout, password reset (email link → `/reset-password`), email confirmation required. Implemented in Phase 3 — see [`AUTHENTICATION.md`](./AUTHENTICATION.md).
+- Sessions: `@supabase/ssr` cookies explicitly configured `HttpOnly`, `SameSite=Lax`, `Secure` in production (library default is not HttpOnly), 1-hour access token, rotating refresh tokens.
+- Protected routes: all app pages except `/login`, `/register`, `/forgot-password` and `/auth/*` (email links use `/auth/confirm` with `token_hash`, not `/auth/callback`). `/reset-password` requires the recovery session.
 
 ### 5.2 Permission model
 
