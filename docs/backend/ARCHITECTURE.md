@@ -59,7 +59,8 @@ No authentication, no server code (`fetch`, Route Handlers, Server Actions: none
 | `api.supabase.com`, `supabase.com` | ❌ Denied by network policy (needed only to link staging/production projects) |
 | Plain PostgreSQL 16 binaries | ✅ Available (used to validate the planning DDL) |
 
-**Consequence:** `supabase start` (Postgres + Auth + Storage + Realtime + Studio in Docker) cannot run here until image pulls work. This is decision **D1**.
+**Consequence (Phase 0):** `supabase start` could not run until image pulls worked (decision **D1**).
+**Update (Phase 1, 2026-10-24): resolved.** Docker Hub served all images after rate-limit retries; the full local stack runs. See [`ENVIRONMENT.md`](./ENVIRONMENT.md).
 
 ---
 
@@ -363,7 +364,7 @@ Details → `docs/backend/SECURITY.md`.
 
 | ID | Decision | Options | Recommendation | Impact if deferred |
 | --- | --- | --- | --- | --- |
-| **D1** | **Local environment** — Supabase Docker images cannot be pulled here (§1.5) | **A.** You allow image pulls (raise/remove the ECR data limit, or allow `pkg-containers.githubusercontent.com`) → full `supabase start` · **B.** Create a free hosted Supabase *dev* project and allow `*.supabase.co`/`api.supabase.com` · **C.** Proceed on plain PostgreSQL 16 with Supabase-compatible auth stubs for schema/RLS/function tests; Auth/Storage/Realtime integration tests stay **blocked** until A or B | **A** (closest to the spec). Use **C** meanwhile so Phase 2–3 database work isn't idle; nothing will be reported as passing that wasn't run. | Phases 3, 5, 6 integration tests and E2E cannot run |
+| **D1** ✅ resolved in Phase 1 | **Local environment** — Supabase Docker images cannot be pulled here (§1.5) | **A.** You allow image pulls (raise/remove the ECR data limit, or allow `pkg-containers.githubusercontent.com`) → full `supabase start` · **B.** Create a free hosted Supabase *dev* project and allow `*.supabase.co`/`api.supabase.com` · **C.** Proceed on plain PostgreSQL 16 with Supabase-compatible auth stubs for schema/RLS/function tests; Auth/Storage/Realtime integration tests stay **blocked** until A or B | **A** (closest to the spec). Use **C** meanwhile so Phase 2–3 database work isn't idle; nothing will be reported as passing that wasn't run. | Phases 3, 5, 6 integration tests and E2E cannot run |
 | **D2** | API style | Route Handlers for data + Server Actions for auth forms · Server Actions for everything | Route Handlers + auth Server Actions | Rework of contracts/tests later |
 | **D3** | Tables beyond the required list (G1–G5) | Add `follow_up_tasks`, `shared_notes`, `star_stories`, `storage_cleanup_queue`; Q&A as `jsonb` · or drop those features' persistence | Add them | Follow-ups, notes, STAR stories wouldn't persist |
 | **D4** | Who may play recordings | Owner+Editor · all members | Owner+Editor (third-party voice data) | Needed before Phase 5 |
