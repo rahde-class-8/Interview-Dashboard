@@ -1,5 +1,7 @@
 # Recording Storage
 
+> **Superseded (planning draft).** The current backend design is in [`docs/backend/`](./backend/ARCHITECTURE.md). This file is kept for reference until it is removed (decision D8).
+
 Status: **Proposed**
 Scope: private upload, verification, playback, retention and deletion of call recordings
 that users created with **other** applications.

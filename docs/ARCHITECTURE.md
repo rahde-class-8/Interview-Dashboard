@@ -1,5 +1,7 @@
 # Backend Architecture
 
+> **Superseded (planning draft).** The current backend design is in [`docs/backend/`](./backend/ARCHITECTURE.md). This file is kept for reference until it is removed (decision D8).
+
 Status: **Proposed (planning only — nothing in this document is implemented yet)**
 Scope: MVP backend for the Recruiter Call + Interview Intelligence Dashboard
 Related: [DATABASE_SCHEMA](./DATABASE_SCHEMA.md) · [API_CONTRACTS](./API_CONTRACTS.md) ·

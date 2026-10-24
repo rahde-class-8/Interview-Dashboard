@@ -1,5 +1,7 @@
 # Security Model
 
+> **Superseded (planning draft).** The current backend design is in [`docs/backend/`](./backend/ARCHITECTURE.md). This file is kept for reference until it is removed (decision D8).
+
 Status: **Proposed**
 Covers: authentication, workspace ownership, authorization (roles + RLS), data protection,
 threat model, and security requirements. Recording-specific controls are detailed in

@@ -1,5 +1,7 @@
 # API Contracts
 
+> **Superseded (planning draft).** The current backend design is in [`docs/backend/`](./backend/ARCHITECTURE.md). This file is kept for reference until it is removed (decision D8).
+
 Status: **Proposed** · Version: `v1`
 Implementation: Next.js Route Handlers under `src/app/api/v1/`, schemas in
 `src/shared/contracts/` (zod), shared by client and server.

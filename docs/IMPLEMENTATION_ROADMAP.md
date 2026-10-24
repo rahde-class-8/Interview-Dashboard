@@ -1,5 +1,7 @@
 # Implementation Roadmap
 
+> **Superseded (planning draft).** The current backend design is in [`docs/backend/`](./backend/ARCHITECTURE.md). This file is kept for reference until it is removed (decision D8).
+
 Status: **Proposed** — the backend is not implemented. This backlog is ordered by
 dependency. Estimates: **S** ≤ 1 day, **M** 2–3 days, **L** 4–5 days (one engineer).
 Priorities: **P0** required for MVP launch, **P1** should ship with MVP if time allows,

@@ -1,5 +1,7 @@
 # Test and Deployment Plan
 
+> **Superseded (planning draft).** The current backend design is in [`docs/backend/`](./backend/ARCHITECTURE.md). This file is kept for reference until it is removed (decision D8).
+
 Status: **Proposed**
 Covers testing strategy, required suites, acceptance gates, CI pipeline, environments and
 deployment requirements for the backend MVP.
