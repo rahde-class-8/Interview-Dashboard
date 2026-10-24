@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, Plus } from "lucide-react";
@@ -15,15 +16,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initials } from "@/lib/format";
-import { useAppStore } from "@/lib/store/app-store";
 import { GlobalSearch } from "./global-search";
 import { MobileNav } from "./mobile-nav";
+import { signOut } from "@/server/auth/actions";
+import type { ShellUser } from "./app-shell";
 import { getPageTitle } from "./nav-config";
 
-export function AppHeader() {
+export function AppHeader({ user }: { user: ShellUser }) {
   const pathname = usePathname();
-  const { data } = useAppStore();
-  const user = data.currentUser;
+  const [signingOut, startSignOut] = useTransition();
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -67,20 +68,28 @@ export function AppHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full" aria-label="Account menu">
                 <Avatar>
-                  <AvatarFallback>{user.name ? initials(user.name) : "…"}</AvatarFallback>
+                  <AvatarFallback>{initials(user.displayName) || "?"}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="flex flex-col">
-                <span>{user.name || "Loading…"}</span>
+                <span>{user.displayName}</span>
                 <span className="text-xs font-normal text-muted-foreground">{user.email}</span>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/settings">Settings</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem disabled>Sign out (no auth in prototype)</DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={signingOut}
+                onSelect={(event) => {
+                  event.preventDefault();
+                  startSignOut(() => signOut());
+                }}
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -4,7 +4,12 @@ import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { DataGate } from "@/components/shared/data-gate";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export interface ShellUser {
+  displayName: string;
+  email: string;
+}
+
+export function AppShell({ children, user }: { children: ReactNode; user: ShellUser }) {
   return (
     <div className="flex min-h-screen">
       <a
@@ -15,7 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
       <AppSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader />
+        <AppHeader user={user} />
         <main id="main-content" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <DataGate>{children}</DataGate>
         </main>
