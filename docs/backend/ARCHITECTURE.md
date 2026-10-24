@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| Status | **Phase 0 complete — awaiting approval.** Nothing below is implemented yet. |
+| Status | **Approved** (D2–D10 as recommended, 2026-10-24). Implemented so far: Phase 1 (local environment), Phase 2 (database). |
 | Audited commit | `8c73867` (branch `docs/backend-architecture-plan`; frontend at `80960f1` on `main`) |
-| Supersedes | The planning drafts in `docs/*.md` (written before this specification). Where they differ, this document wins; see §12. |
+| Supersedes | The earlier planning drafts (`docs/*.md`), removed in Phase 2 per D8; still available in git history (commit `8c73867`). |
 
 ---
 
@@ -204,10 +204,10 @@ In the table below, **bold** tables are required by the specification; the other
 
 - UUID primary keys (`gen_random_uuid()`); `created_at` / `updated_at` (`timestamptz`, trigger-maintained).
 - Every workspace-owned row has `workspace_id`. Children reference parents with **composite foreign keys** `(parent_id, workspace_id) → parent(id, workspace_id)`, so a record can never link to another workspace's record (validated against Postgres 16 during planning).
-- Explicit deletion behavior: workspace → cascade everything; opportunity → cascade calls, interviews, tasks; company → **restrict** while referenced; recruiter → set null on opportunities/calls; call → cascade recordings rows (objects enqueued for purge) and its follow-up.
+- Explicit deletion behavior: workspace → cascade everything; opportunity → cascade calls, interviews, tasks; company → **blocked** while referenced (`NO ACTION`); recruiter → set null on opportunities/calls; call → cascade recordings rows (objects enqueued for purge) and its follow-up.
 - Unique constraints: company name per workspace (case-insensitive); one owner per workspace; one pending invitation per (workspace, email); one follow-up per call; `recordings.storage_path`.
 - `recordings` columns per spec: `id, workspace_id, recruiter_call_id, uploaded_by, file_name, storage_path, mime_type, file_size, duration_seconds, created_at`, plus `status` (`pending` / `uploaded` / `failed` / `deleted`), `uploaded_at`, `delete_after`, `consent_confirmed_at`.
-- Full column definitions, indexes and migration instructions will be written in `docs/backend/DATABASE.md` alongside the Phase 2 migrations.
+- Full column definitions, indexes and migration instructions: [`DATABASE.md`](./DATABASE.md).
 
 ---
 
@@ -371,7 +371,7 @@ Details → `docs/backend/SECURITY.md`.
 | **D5** | Recording limits & retention | Size limit, quota, auto-delete default | 100 MB, 2 GiB/workspace, keep until deleted (optional 30/90/180/365-day auto-delete) | Needed before Phase 5 |
 | **D6** | Auth methods | Email+password only · + OAuth (Google) | Email+password with confirmation; OAuth later | Low |
 | **D7** | Realtime scope | Tables listed in §8 · none in MVP | Tables in §8 | Low |
-| **D8** | Earlier drafts in `docs/*.md` | Delete once `docs/backend/` is complete · keep as history | Delete after Phase 1 | Conflicting docs |
+| **D8** ✅ done in Phase 2 | Earlier drafts in `docs/*.md` | Delete once `docs/backend/` is complete · keep as history | Delete after Phase 1 | Conflicting docs |
 | **D9** | Email provider (staging/prod SMTP) | Resend · Postmark · other | Decide before staging (Phase 9) | Blocks staging invites/resets |
 | **D10** | Branching | Continue on this branch · new `backend/*` branch from `main` per phase | New branch per phase, PRs into `main` | Low |
 

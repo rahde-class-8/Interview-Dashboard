@@ -82,7 +82,8 @@ Project layout:
 ```text
 supabase/
 ├── config.toml        # local stack configuration (project_id "interview-dashboard")
-├── migrations/        # versioned SQL migrations (empty until the database phase)
+├── migrations/        # versioned SQL migrations (see DATABASE.md)
+├── tests/database/    # pgTAP tests (npm run test:db)
 ├── .gitignore         # ignores .temp/, .branches/, local env files
 └── .temp/             # CLI runtime cache — contains local keys, never committed
 ```

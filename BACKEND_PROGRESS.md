@@ -5,9 +5,9 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 
 | Phase | Status | Gate |
 | --- | --- | --- |
-| 0 — Repository and architecture audit | **Complete — awaiting approval** | Architecture reviewed and approved |
+| 0 — Repository and architecture audit | **Complete — approved** (D2–D10 as recommended) | Architecture reviewed and approved |
 | 1 — Development environment | **Complete (local)** · staging/production config Not Started | Local services start successfully ✅ |
-| 2 — Database architecture | Not Started | Migrations and relationship tests pass |
+| 2 — Database architecture | **Complete** | Migrations and relationship tests pass |
 | 3 — Authentication and authorization | Not Started | RLS and permission tests pass |
 | 4 — Application services | Not Started | Core CRUD operations work |
 | 5 — Recording storage | Not Started | Authorized uploads and playback work |
@@ -20,7 +20,7 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 
 ## Phase 0 — Repository and Architecture Audit
 
-**Status:** Complete — awaiting explicit approval before Phase 1.
+**Status:** Complete — approved 2026-10-24 (D2–D10 as recommended; D1 resolved in Phase 1).
 
 ### Completed tasks
 
@@ -150,3 +150,93 @@ None (by design — schema work starts in Phase 2).
 Approve or amend Phase 0 decisions D2–D10 (`docs/backend/ARCHITECTURE.md` §11), then start
 Phase 2: first migrations (identity/workspace tables, RLS baseline) with pgTAP tests
 against this local stack.
+
+---
+
+## Phase 2 — Database Architecture
+
+**Status:** Complete (2026-10-24). Gate "migrations and relationship tests pass": ✅ 97/97.
+
+### Completed tasks
+
+- Six version-controlled migrations creating all 14 required tables plus the four approved
+  additions (`follow_up_tasks`, `shared_notes`, `star_stories`, `storage_cleanup_queue`).
+- UUID primary keys, `created_at`/`updated_at` (trigger-maintained), explicit deletion
+  behavior on every foreign key, indexes for every foreign key and list sort order.
+- Workspace ownership: owner auto-membership, exactly-one-owner index, owner protection
+  trigger, sign-up bootstrap (profile + personal workspace), profile email sync.
+- Workspace isolation via composite `(id, workspace_id)` foreign keys on all 13 child relations.
+- Business rules as constraints: compensation completeness/range, enumerations, size limits,
+  candidate Q&A shape, follow-up ↔ call opportunity consistency, server-shaped recording paths,
+  recording status consistency, mandatory consent timestamp, append-only activity log.
+- Storage cleanup queue filled by triggers on soft delete, delete and cascades.
+- Deny-by-default security baseline: RLS enabled + forced on all tables (no policies yet),
+  no `anon` privileges, no PUBLIC function execution, private `app` schema for helpers.
+- Removed the superseded planning drafts in `docs/*.md` (D8).
+- Wrote `docs/backend/DATABASE.md`; added `db:new`, `db:reset`, `db:lint`, `test:db` scripts.
+
+### Files created or modified
+
+- Created: `supabase/migrations/20261024170000_baseline.sql`, `…170100_identity.sql`,
+  `…170200_recruitment.sql`, `…170300_recordings.sql`, `…170400_interview_intelligence.sql`,
+  `…170500_collaboration.sql`; `supabase/tests/database/001_schema.test.sql` … `005_recordings.test.sql`;
+  `docs/backend/DATABASE.md`.
+- Modified: `package.json` (scripts), `docs/backend/ARCHITECTURE.md`, `docs/backend/ENVIRONMENT.md`,
+  `BACKEND_PROGRESS.md`.
+- Deleted: `docs/API_CONTRACTS.md`, `docs/ARCHITECTURE.md`, `docs/DATABASE_SCHEMA.md`,
+  `docs/IMPLEMENTATION_ROADMAP.md`, `docs/RECORDING_STORAGE.md`, `docs/SECURITY_MODEL.md`,
+  `docs/TEST_PLAN.md` (superseded; in git history).
+- `supabase/migrations/.gitkeep` removed (directory now has real migrations).
+
+### Database migrations
+
+| Migration | Applied locally |
+| --- | --- |
+| `20261024170000_baseline` | ✅ |
+| `20261024170100_identity` | ✅ |
+| `20261024170200_recruitment` | ✅ |
+| `20261024170300_recordings` | ✅ |
+| `20261024170400_interview_intelligence` | ✅ |
+| `20261024170500_collaboration` | ✅ |
+
+Not applied to any hosted project (none exist).
+
+### Tests executed and results
+
+| Check | Result |
+| --- | --- |
+| `npx supabase db reset` (all migrations from scratch) | ✅ |
+| `npm run db:lint` | ✅ no schema errors |
+| `npm run test:db` — 001 schema (11), 002 identity (22), 003 relationships (26), 004 constraints (24), 005 recordings (14) | ✅ 97/97 |
+| Mutation check: dropped the recording path check and one composite FK | ✅ suite failed on exactly those tests (4 failures); restored and green again |
+
+Defects found by the tests and fixed before commit:
+
+1. `app.set_updated_at()` was created before default privileges were revoked, so `anon`
+   could execute it → baseline reordered + explicit revoke.
+2. `opportunities → companies` used `RESTRICT`, whose immediate check made workspace
+   deletion depend on internal trigger order → changed to `NO ACTION`.
+
+### Outstanding issues
+
+- No RLS policies yet: client roles can read/write nothing (intentional until Phase 3).
+- `activity_events` append-only trigger only becomes reachable for client roles once
+  policies exist; it will be re-tested in Phase 3.
+- Transactional multi-record writes (`log_recruiter_call`, etc.) are implemented with the
+  services in Phase 4, because they depend on Phase 3 authorization.
+- No `supabase/seed.sql` yet (fictional demo data) — planned with auth test accounts in Phase 3.
+- `npm audit` finding in Next.js' bundled `postcss` still open (from Phase 1).
+
+### Architectural decisions
+
+- Text + `CHECK` instead of Postgres enums; `jsonb` for call Q&A; helper functions in a
+  private `app` schema; `NO ACTION` for "block while referenced" relations.
+- Recording IDs are generated by the server before insert so the storage path can be
+  validated against the ID by a constraint.
+
+### Next recommended action
+
+Phase 3 — Authentication and authorization: role helper (`app.has_workspace_role`),
+RLS policies for every table, invitation acceptance function, Supabase Auth pages
+(register, login, logout, password reset), middleware route protection, and the
+role × table × operation pgTAP matrix.
