@@ -127,7 +127,8 @@ project, but treat them as secrets anyway: never paste them into issues, logs or
 npm run test:db            # pgTAP database tests (schema, relationships, RLS matrix)
 npm run test:unit          # Vitest unit tests
 npm run test:integration   # Vitest tests against the local Supabase HTTP API
-npm run test:e2e           # Playwright: builds, starts on :3000, runs browser tests (uses Mailpit)
+npm run test:api           # Playwright API project: HTTP tests of /api/v1 with real sessions
+npm run test:e2e           # Playwright: builds, starts on :3000, runs API + browser tests (uses Mailpit)
 ```
 
 Playwright uses the preinstalled Chromium matching `@playwright/test` 1.56.1

@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 import { SESSION_COOKIE_OPTIONS, getSupabasePublicEnv } from "@/lib/supabase/env";
+import type { Database } from "../database.types";
 
 /**
  * Request-scoped Supabase client acting as the signed-in user (RLS applies).
@@ -13,7 +14,7 @@ export async function createSupabaseServerClient() {
   const { url, publishableKey } = getSupabasePublicEnv();
   const cookieStore = await cookies();
 
-  return createServerClient(url, publishableKey, {
+  return createServerClient<Database>(url, publishableKey, {
     cookieOptions: SESSION_COOKIE_OPTIONS,
     cookies: {
       getAll() {
@@ -32,3 +33,5 @@ export async function createSupabaseServerClient() {
     },
   });
 }
+
+export type ServerSupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;

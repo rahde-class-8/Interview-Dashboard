@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| Status | **Approved** (D2–D10 as recommended, 2026-10-24). Implemented so far: Phase 1 (local environment), Phase 2 (database), Phase 3 (authentication and authorization). |
+| Status | **Approved** (D2–D10 as recommended, 2026-10-24). Implemented so far: Phases 1–4 (local environment, database, authentication/authorization, application services). |
 | Audited commit | `8c73867` (branch `docs/backend-architecture-plan`; frontend at `80960f1` on `main`) |
 | Supersedes | The earlier planning drafts (`docs/*.md`), removed in Phase 2 per D8; still available in git history (commit `8c73867`). |
 
@@ -272,7 +272,7 @@ Invitations: 32-byte random token emailed once, stored as SHA-256 hash, single-u
 - Error envelope `{ error: { code, message, details?, requestId } }`; codes `validation_failed` (400), `unauthenticated` (401), `forbidden` (403), `not_found` (404, also for other workspaces — no existence leaks), `conflict` (409), `file_too_large` (413), `unsupported_media_type` (415), `rate_limited` (429), `internal_error` (500).
 - Modules and main operations: companies, recruiters, opportunities (+ stage change, aggregated intel), recruiter calls (composite transactional create/update), recordings (init upload, complete, playback URL, delete), interviews, preparation tasks, questions, STAR stories, follow-ups (incl. `?due=upcoming|overdue`), members, invitations, notes, comments, activity, dashboard metrics.
 - `Idempotency-Key` honored for call creation, recording init and invitations.
-- Full per-operation documentation → `docs/backend/API.md` (Phase 4).
+- Full per-operation documentation → [`API.md`](./API.md). Pagination is offset-based behind an opaque cursor (MVP trade-off).
 
 ---
 

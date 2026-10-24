@@ -1,12 +1,12 @@
 # Database
 
-Status: **Phase 2 implemented and tested locally** (2026-10-24).
+Status: schema (Phase 2), authorization (Phase 3) and transactional functions (Phase 4)
+implemented and tested locally (2026-10-24).
 Engine: Supabase PostgreSQL 17 (local stack). Migrations: `supabase/migrations/`.
-Tests: `supabase/tests/database/` (pgTAP, 97 assertions).
+Tests: `supabase/tests/database/` (pgTAP, 402 assertions).
 
-Row Level Security is **enabled and forced on every table with no policies yet**, so client
-roles (`anon`, `authenticated`) currently get no rows and cannot write. Access policies,
-role helpers and grants are added in Phase 3 (see `AUTHENTICATION.md` once written).
+Row Level Security is enabled and forced on every table. Policies, role helpers and grants
+are described in [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6; transactional write functions in §4.4 below.
 
 ---
 
@@ -114,6 +114,19 @@ links regardless of application code. Verified for all 13 child relationships in
 All helper functions live in the private `app` schema (not exposed through the Data API),
 pin `search_path = ''`, and are not executable by `anon`.
 
+### 4.4 Transactional write functions (Phase 4)
+
+| Function | Purpose |
+| --- | --- |
+| `public.save_opportunity(workspace_id, opportunity_id \| null, payload jsonb)` | Create/partially update an opportunity; find-or-create company by name; optional inline recruiter |
+| `public.save_recruiter_call(workspace_id, call_id \| null, payload jsonb)` | Create/partially update a call together with its opportunity, recruiter and follow-up |
+| `app.resolve_company`, `app.apply_recruiter`, `app.apply_opportunity`, `app.resolve_recruiter_ref` | Building blocks used by the two functions above |
+
+All are `SECURITY INVOKER` (RLS and grants apply), run in one transaction, and use
+`jsonb_populate_record(existing_row, patch)` so partial updates change only the keys sent.
+Covered by `008_services.test.sql` (atomic rollback, find-or-create, partial updates,
+cross-workspace references, permissions).
+
 ## 5. Deletion behavior
 
 | When this is deleted… | Effect |
@@ -131,14 +144,17 @@ pin `search_path = ''`, and are not executable by `anon`.
 deletion cascades regardless of internal trigger order, while a direct company delete is
 still rejected.
 
-## 6. Privileges (current state)
+## 6. Privileges
 
-- Default privileges were changed so new public tables, sequences and functions grant
-  nothing to `anon`, and functions grant nothing to `PUBLIC`.
-- `authenticated` keeps Supabase's default table grants, but RLS (forced, no policies) blocks
-  all rows until Phase 3 policies exist. `storage_cleanup_queue` grants nothing to client roles.
-- `authenticated` can execute only `app.valid_candidate_questions` (needed by a check
-  constraint). `SECURITY DEFINER` helpers are not executable by client roles.
+- Default privileges grant nothing to `anon` on new public tables, sequences and functions,
+  and functions grant nothing to `PUBLIC`.
+- `authenticated` has explicit least-privilege table and column grants (Supabase's broad
+  defaults, including `TRUNCATE`, were revoked in Phase 3). Full table in
+  [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6.2. `storage_cleanup_queue` grants nothing to client roles.
+- Executable by `authenticated`: `app.valid_candidate_questions` (check constraint),
+  `app.has_workspace_role` / `app.shares_workspace_with` (policies), `public.accept_invitation`,
+  and the Phase 4 write functions. No other `SECURITY DEFINER` function is callable by clients
+  (asserted by `001_schema.test.sql`).
 
 ## 7. Migrations
 
@@ -150,6 +166,9 @@ still rejected.
 | `20261024170300_recordings.sql` | recordings, storage cleanup queue + triggers |
 | `20261024170400_interview_intelligence.sql` | interviews, questions, preparation/follow-up tasks, STAR stories |
 | `20261024170500_collaboration.sql` | shared notes, comments, activity events |
+| `20261024180000_authorization.sql` | role helpers, least-privilege grants, RLS policies, `accept_invitation` (Phase 3) |
+| `20261024190000_application_services.sql` | `save_opportunity`, `save_recruiter_call` and helpers (Phase 4) |
+| `20261024191000_workspace_insert_id.sql` | allow the API to supply a new workspace's id (Phase 4) |
 
 ### 7.1 Commands
 
@@ -159,6 +178,7 @@ npx supabase migration up    # apply pending migrations to the local DB (keeps d
 npm run db:reset             # rebuild local DB from all migrations (+ seed) — DISCARDS local data
 npm run db:lint              # static checks on functions (plpgsql_check)
 npm run test:db              # run pgTAP tests (supabase test db)
+npm run db:types             # regenerate src/server/core/database.types.ts after schema changes
 npx supabase migration list --local
 ```
 
@@ -169,8 +189,8 @@ npx supabase migration list --local
 2. Migrations already applied to a shared environment (staging/production) are never edited;
    add a new migration instead. (The Phase 2 files were adjusted only while they existed
    solely in the local development database.)
-3. A migration that adds a table must also enable + force RLS for it and, from Phase 3 on,
-   add its policies. `001_schema.test.sql` fails if any public table lacks forced RLS.
+3. A migration that adds a table must also enable + force RLS for it and add its policies
+   and grants. `001_schema.test.sql` fails if any public table lacks forced RLS.
 4. Destructive changes follow expand → migrate → contract across releases.
 5. Run `npm run db:reset && npm run test:db` before committing migration changes.
 

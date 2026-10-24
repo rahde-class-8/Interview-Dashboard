@@ -34,6 +34,9 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname, search } = request.nextUrl;
 
+  // API routes authenticate themselves and answer 401 as JSON; never redirect them.
+  if (matchesPath(pathname, ["/api"])) return response;
+
   if (!user && !matchesPath(pathname, PUBLIC_PATHS)) {
     const login = request.nextUrl.clone();
     login.pathname = "/login";

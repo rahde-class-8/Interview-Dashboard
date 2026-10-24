@@ -9,7 +9,7 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 | 1 — Development environment | **Complete (local)** · staging/production config Not Started | Local services start successfully ✅ |
 | 2 — Database architecture | **Complete** | Migrations and relationship tests pass |
 | 3 — Authentication and authorization | **Complete** | RLS and permission tests pass |
-| 4 — Application services | Not Started | Core CRUD operations work |
+| 4 — Application services | **Complete** | Core CRUD operations work |
 | 5 — Recording storage | Not Started | Authorized uploads and playback work |
 | 6 — Collaboration | Not Started | Role-based sharing is enforced |
 | 7 — Frontend integration | Not Started | Frontend workflows persist real data |
@@ -338,3 +338,97 @@ Phase 4 — Backend application services: Route Handlers under `/api/v1` for com
 recruiters, opportunities (incl. stage changes), recruiter calls (transactional composite
 create/update), interviews, preparation tasks, questions and follow-ups, with shared zod
 contracts, consistent errors, pagination/filtering, and `docs/backend/API.md`.
+
+---
+
+## Phase 4 — Backend Application Services
+
+**Status:** Complete (2026-10-24). Gate "core CRUD operations work": ✅
+(pgTAP 402/402, Vitest 73/73, Playwright 32/32 — 28 API + 4 browser).
+
+### Completed tasks
+
+- **Transactional DB functions** (`20261024190000_application_services.sql`):
+  `save_opportunity` and `save_recruiter_call` (SECURITY INVOKER, one transaction) with
+  find-or-create company, inline recruiter create/update, partial updates via
+  `jsonb_populate_record`, call follow-up upsert/removal preserving completion.
+- **REST API** under `/api/v1` (22 route files): `me`, workspaces (list/create/get/rename/
+  delete with name confirmation), companies, recruiters, opportunities (+ `PUT …/stage`),
+  recruiter calls (composite create/update, summaries vs detail), interviews, preparation
+  tasks, questions, STAR stories, follow-ups (upcoming/overdue relative to the caller's date).
+- **Shared pipeline** (`withApi`): request id, Origin check + JSON-only mutations, 1 MB body
+  limit, verified user (JSON 401), workspace role check (404 non-member / 403 role), zod
+  validation with field details, database-error mapping without leaking internals,
+  `Cache-Control: no-store`, structured error logs without bodies.
+- **Shared contracts** (`src/shared/contracts/*`): zod schemas + TypeScript types used by
+  server and (in Phase 7) client.
+- **Pagination/filtering/sorting** on every collection; safe search (LIKE wildcard escaping,
+  quoted `or()` values).
+- **Generated DB types** (`npm run db:types`).
+- **Docs**: `docs/backend/API.md`; updated `DATABASE.md` (Phase 3 + 4 content was missing),
+  `ARCHITECTURE.md`, `ENVIRONMENT.md`.
+
+### Files created or modified
+
+- Created: `supabase/migrations/20261024190000_application_services.sql`,
+  `20261024191000_workspace_insert_id.sql`, `supabase/tests/database/008_services.test.sql`,
+  `src/server/core/{api,crud,errors,pagination,search,rows,database.types}.ts`,
+  `src/server/recruitment/{companies,recruiters,opportunities,calls,payloads}.ts`,
+  `src/server/interviews/interviews.ts`, `src/server/preparation/{tasks,questions,star-stories}.ts`,
+  `src/server/followups/follow-ups.ts`, `src/server/workspaces/workspaces.ts`,
+  `src/shared/contracts/{common,workspaces,companies,recruiters,opportunities,calls,interviews,preparation,follow-ups}.ts`,
+  `src/app/api/v1/**/route.ts` (22), `tests/api/{helpers,access,workspaces,recruitment,calls,interview-intelligence}.spec.ts`,
+  `tests/unit/{api-core,contracts}.test.ts`, `docs/backend/API.md`.
+- Modified: `src/lib/supabase/middleware.ts` (API routes are never redirected),
+  `src/server/core/supabase/server.ts` (typed client), `playwright.config.ts` (api + chromium
+  projects, loads `.env.local`), `package.json` (scripts `db:types`, `test:api`), docs.
+
+### Database migrations
+
+| Migration | Applied locally |
+| --- | --- |
+| `20261024190000_application_services` | ✅ |
+| `20261024191000_workspace_insert_id` | ✅ |
+
+### Tests executed and results
+
+| Suite | Result |
+| --- | --- |
+| `npm run test:db` (8 files) | ✅ 402/402 (new: 26 service-function assertions) |
+| `npm run test` (unit + HTTP integration) | ✅ 73/73 (new: 33 unit) |
+| `npx playwright test` (api + chromium) | ✅ 32/32 (new: 28 API) |
+| `npm run lint`, `npx tsc --noEmit`, `npm run build` | ✅ |
+| Secret scan (client bundle, repo files) | ✅ 0 matches |
+
+Defects found by the tests and fixed:
+
+1. Supabase query builders are thenables; returning one from an async filter executed it
+   early (`range is not a function`) → split async `resolveList` from synchronous `applyList`.
+2. `INSERT … RETURNING` on workspaces failed the SELECT policy (owner membership is added by
+   an AFTER trigger) → server-generated id + read-back; migration grants `insert (id)`.
+3. PostgREST returns the call follow-up as an array (composite FK vs single-column unique
+   index) → mapper accepts both shapes.
+4. `NO ACTION` FK violations put "still referenced" in `details`, not `message` → in-use
+   deletes now return `409 in_use` instead of `400`.
+5. Middleware redirected unauthenticated API calls to `/login` → API now answers JSON 401.
+
+### Outstanding issues
+
+- Pagination is offset-based (documented trade-off); switch to keyset if lists grow.
+- Activity events for important changes are not written yet (Phase 6, via triggers).
+- Frontend still uses mock data (Phase 7).
+- Pre-existing `npm audit` finding in Next.js' bundled `postcss`.
+
+### Architectural decisions
+
+- REST Route Handlers for all data (D2); composite writes as SECURITY INVOKER DB functions.
+- Generic `crud()` helper for simple resources; custom services for opportunities and calls.
+- Calls list returns summaries (no long text); detail returns everything.
+- Follow-up "overdue/upcoming" uses the client's local date (`asOf`) to avoid timezone errors.
+
+### Next recommended action
+
+Phase 5 — Audio recording storage: private `recordings` bucket (size/MIME limits), upload
+init with signed upload URLs, completion with size + magic-byte verification, owner/editor
+playback via 5-minute signed URLs, soft delete, cleanup-queue purge and abandoned-upload jobs,
+retention, and `docs/backend/STORAGE.md`.
