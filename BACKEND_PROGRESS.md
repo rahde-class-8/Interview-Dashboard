@@ -8,7 +8,7 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 | 0 — Repository and architecture audit | **Complete — approved** (D2–D10 as recommended) | Architecture reviewed and approved |
 | 1 — Development environment | **Complete (local)** · staging/production config Not Started | Local services start successfully ✅ |
 | 2 — Database architecture | **Complete** | Migrations and relationship tests pass |
-| 3 — Authentication and authorization | **Complete** | RLS and permission tests pass |
+| 3 — Authentication and authorization | Not Started | RLS and permission tests pass |
 | 4 — Application services | Not Started | Core CRUD operations work |
 | 5 — Recording storage | Not Started | Authorized uploads and playback work |
 | 6 — Collaboration | Not Started | Role-based sharing is enforced |
@@ -240,101 +240,3 @@ Phase 3 — Authentication and authorization: role helper (`app.has_workspace_ro
 RLS policies for every table, invitation acceptance function, Supabase Auth pages
 (register, login, logout, password reset), middleware route protection, and the
 role × table × operation pgTAP matrix.
-
----
-
-## Phase 3 — Authentication and Authorization
-
-**Status:** Complete (2026-10-24). Gate "RLS and permission tests pass": ✅
-(pgTAP 376/376, Vitest 40/40, Playwright 4/4).
-
-### Completed tasks
-
-- **Database authorization** (`20261024180000_authorization.sql`): role helpers
-  (`app.role_rank`, `app.has_workspace_role`, `app.shares_workspace_with`); replaced Supabase's
-  broad default grants (incl. RLS-bypassing `TRUNCATE`) with least-privilege table/column
-  grants; RLS policies for all 18 tables per the approved matrix; owner-only moderation
-  guard on comments; `public.accept_invitation` (hashed, single-use, expiring, email-bound).
-- **Supabase Auth**: email + password, email confirmation required (also locally),
-  8+ character passwords with letters and digits, `token_hash` email templates for
-  confirmation and recovery, `site_url` = `http://localhost:3000`.
-- **App**: Server Actions `signIn`, `signUp`, `signOut`, `requestPasswordReset`,
-  `updatePassword` with shared zod validation; `/auth/confirm` route; pages `/login`,
-  `/register`, `/forgot-password`, `/reset-password`; middleware session refresh + route
-  protection with sanitized `next` redirects; server-side user check in the app layout;
-  real user name/email and working Sign out in the header.
-- **Session hardening**: auth cookies HttpOnly, SameSite=Lax, Secure in production builds
-  (library default is not HttpOnly).
-- **No account enumeration**: identical responses for registration and reset regardless of
-  whether the email exists; generic sign-in error.
-- **Tests**: RLS matrix (218), special cases (61), HTTP integration (8), unit (32), E2E (4).
-- **Docs**: `docs/backend/AUTHENTICATION.md`; updates to `ARCHITECTURE.md`, `ENVIRONMENT.md`.
-
-### Files created or modified
-
-- Created: `supabase/migrations/20261024180000_authorization.sql`,
-  `supabase/tests/database/006_rls_matrix.test.sql`, `007_rls_special_cases.test.sql`,
-  `supabase/templates/confirmation.html`, `recovery.html`,
-  `src/middleware.ts`, `src/lib/safe-redirect.ts`, `src/lib/supabase/{env,middleware}.ts`,
-  `src/server/core/{auth.ts,supabase/server.ts}`, `src/server/auth/{actions,errors}.ts`,
-  `src/shared/contracts/auth.ts`, `src/features/auth/*` (6 files),
-  `src/app/(app)/layout.tsx`, `src/app/(auth)/{layout,login/page,register/page,forgot-password/page}.tsx`,
-  `src/app/reset-password/page.tsx`, `src/app/auth/confirm/route.ts`,
-  `vitest.config.ts`, `playwright.config.ts`, `tests/{setup-env.ts,stubs/empty.ts}`,
-  `tests/unit/*` (3), `tests/integration/rls-http.test.ts`, `tests/e2e/{auth.spec.ts,mailpit.ts}`,
-  `docs/backend/AUTHENTICATION.md`.
-- Moved (no content change): app pages into `src/app/(app)/` (route group; URLs unchanged).
-- Modified: `src/app/layout.tsx`, `src/components/layout/{app-shell,app-header}.tsx`,
-  `supabase/config.toml`, `supabase/tests/database/001_schema.test.sql`, `package.json`
-  (deps: `@supabase/supabase-js`, `@supabase/ssr`, `zod`, `server-only`; dev: `vitest`,
-  `@playwright/test@1.56.1`, `@types/node@^22`; test scripts), `.gitignore`, docs.
-
-### Database migrations
-
-| Migration | Applied locally |
-| --- | --- |
-| `20261024180000_authorization` | ✅ |
-
-### Tests executed and results
-
-| Suite | Command | Result |
-| --- | --- | --- |
-| Database (7 files) | `npm run test:db` | ✅ 376/376 |
-| Unit | `npm run test:unit` | ✅ 32/32 |
-| HTTP integration | `npm run test:integration` | ✅ 8/8 (fails loudly if Supabase is not configured) |
-| End-to-end | `npm run test:e2e` | ✅ 4/4 |
-| Lint / types / build | `npm run lint`, `npx tsc --noEmit`, `npm run build` | ✅ |
-
-Issues found and fixed during the phase:
-
-1. Supabase default grants gave `authenticated` `TRUNCATE` (bypasses RLS) → replaced with explicit grants.
-2. `@supabase/ssr` cookies are not HttpOnly by default → explicit cookie options + E2E assertion.
-3. Vitest silently skipped integration tests because Next's env loader ignores `.env.local`
-   under `NODE_ENV=test` → explicit loading and a hard failure when unconfigured.
-4. Middleware guest redirect could encode a query string into the path → builds a full URL.
-
-### Outstanding issues
-
-- Domain data in the UI is still mock data (Phase 7); the overview greeting still shows the
-  sample name, while the header shows the real user.
-- Invitation token generation, invite UI and emails: Phase 6. Ownership transfer function: Phase 6.
-- No `supabase/seed.sql` demo data yet; tests create their own fixtures. Will add with
-  frontend integration (Phase 7) if useful for local demos.
-- Hosted Auth configuration (Site URL, templates, SMTP — D9) is documented but not applied
-  (no hosted projects; requires approval).
-- Pre-existing `npm audit` finding in Next.js' bundled `postcss`.
-
-### Architectural decisions
-
-- Email links use `verifyOtp` with `token_hash` (cross-device), not PKCE code exchange.
-- Auth runs server-side only; session cookies HttpOnly. A future browser Realtime client
-  will need a server-issued access token.
-- Members are added only through invitation acceptance; owners can change roles except to owner.
-- Recording status transitions and deletion are server-only (service role, Phase 5).
-
-### Next recommended action
-
-Phase 4 — Backend application services: Route Handlers under `/api/v1` for companies,
-recruiters, opportunities (incl. stage changes), recruiter calls (transactional composite
-create/update), interviews, preparation tasks, questions and follow-ups, with shared zod
-contracts, consistent errors, pagination/filtering, and `docs/backend/API.md`.
