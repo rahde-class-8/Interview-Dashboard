@@ -91,6 +91,8 @@ export const noteUpdateSchema = z
 
 export const noteListQuerySchema = pageQuerySchema.extend({
   opportunityId: uuidSchema.optional(),
+  /** `detail` includes each note's body. */
+  view: z.enum(["summary", "detail"]).default("summary"),
 });
 
 export interface PersonRef {
@@ -119,6 +121,7 @@ export type SharedNoteSummary = Omit<SharedNote, "body">;
 export const commentCreateSchema = z.object({ body: requiredText(5000, "Comment") });
 export const commentUpdateSchema = commentCreateSchema;
 export const commentListQuerySchema = pageQuerySchema;
+export const workspaceCommentListQuerySchema = pageQuerySchema.extend({ noteId: uuidSchema.optional() });
 
 export interface Comment {
   id: string;

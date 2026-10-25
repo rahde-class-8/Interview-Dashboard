@@ -65,6 +65,8 @@ export const callListQuerySchema = pageQuerySchema.extend({
   recruiterId: uuidSchema.optional(),
   from: dateTimeSchema.optional(),
   to: dateTimeSchema.optional(),
+  /** `detail` returns full `Call` records instead of summaries. */
+  view: z.enum(["summary", "detail"]).default("summary"),
 });
 
 export interface CallSummary {

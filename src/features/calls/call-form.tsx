@@ -15,7 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { createId } from "@/lib/id";
 import {
   EMPLOYMENT_TYPE_LABELS,
-  fromDateInputValue,
   parseLines,
   parseList,
   toDateInputValue,
@@ -25,9 +24,12 @@ import {
 import { useAppStore } from "@/lib/store/app-store";
 import { findById, getCallFollowUp } from "@/lib/store/selectors";
 import { useActions } from "@/lib/store/use-actions";
+import { FormError } from "@/components/shared/form-error";
+import { useSubmit } from "@/lib/hooks/use-submit";
 import type { AppData, CandidateQuestion, EmploymentType, ID, RecruiterCall, WorkMode } from "@/types";
 
 const NEW = "__new";
+const NONE = "__none";
 
 type TabId = "contact" | "job" | "requirements" | "intelligence" | "followup";
 
@@ -132,7 +134,7 @@ function recruiterFields(data: AppData, recruiterId: string): Partial<CallFormVa
 export function buildInitialValues(data: AppData, call?: RecruiterCall, presetOpportunityId?: ID): CallFormValues {
   const opportunityId = call?.opportunityId ?? (findById(data.opportunities, presetOpportunityId)?.id ?? NEW);
   const opp = findById(data.opportunities, opportunityId);
-  const recruiterId = call?.recruiterId ?? opp?.recruiterId ?? NEW;
+  const recruiterId = call ? (call.recruiterId ?? NONE) : (opp?.recruiterId ?? NEW);
   const followUp = call ? getCallFollowUp(data, call.id) : undefined;
 
   return {
@@ -173,7 +175,7 @@ export function buildInitialValues(data: AppData, call?: RecruiterCall, presetOp
 
 function validate(v: CallFormValues): Errors {
   const e: Errors = {};
-  if (!v.recruiterName.trim()) e.recruiterName = "Recruiter name is required.";
+  if (v.recruiterId !== NONE && !v.recruiterName.trim()) e.recruiterName = "Recruiter name is required.";
   if (v.recruiterEmail && !/^\S+@\S+\.\S+$/.test(v.recruiterEmail)) e.recruiterEmail = "Enter a valid email address.";
   if (!v.companyName.trim()) e.companyName = "Company is required.";
   if (!v.callDateTime || Number.isNaN(new Date(v.callDateTime).getTime())) e.callDateTime = "Enter the call date and time.";
@@ -197,6 +199,7 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
   const [errors, setErrors] = useState<Errors>({});
   const [tab, setTab] = useState<TabId>("contact");
   const summaryRef = useRef<HTMLDivElement>(null);
+  const submit = useSubmit();
 
   const set = <K extends FieldKey>(key: K, value: CallFormValues[K]) => setValues((v) => ({ ...v, [key]: value }));
 
@@ -214,7 +217,7 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
     setValues((v) => ({
       ...v,
       recruiterId: id,
-      ...(id === NEW
+      ...(id === NEW || id === NONE
         ? { recruiterName: "", recruiterEmail: "", recruiterPhone: "", recruiterAgency: "" }
         : recruiterFields(data, id)),
     }));
@@ -227,7 +230,7 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
     setTimeout(() => document.getElementById(FIELD_INPUT_ID[key] ?? "")?.focus(), 0);
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const nextErrors = validate(values);
     setErrors(nextErrors);
@@ -237,73 +240,63 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
       return;
     }
 
-    const companyId = actions.ensureCompany(values.companyName);
-    const recruiterId = actions.saveRecruiter(
-      {
-        name: values.recruiterName.trim(),
-        email: values.recruiterEmail.trim(),
-        phone: values.recruiterPhone.trim(),
-        agency: values.recruiterAgency.trim() || undefined,
-      },
-      companyId,
-      values.recruiterId === NEW ? undefined : values.recruiterId,
+    const companyName = values.companyName.trim();
+    const existingCompany = data.companies.find((c) => c.name.toLowerCase() === companyName.toLowerCase());
+    const opportunityData = {
+      company: existingCompany ? { id: existingCompany.id } : { name: companyName },
+      title: values.jobTitle.trim(),
+      location: values.location.trim(),
+      workMode: values.workMode,
+      employmentType: values.employmentType,
+      compensation: values.compMin
+        ? { min: Number(values.compMin), max: Number(values.compMax), currency: "USD", period: values.compPeriod }
+        : null,
+      jobDescription: values.jobDescription.trim(),
+      requiredSkills: parseList(values.requiredSkills),
+      preferredSkills: parseList(values.preferredSkills),
+    };
+    const recruiterData = {
+      name: values.recruiterName.trim(),
+      email: values.recruiterEmail.trim(),
+      phone: values.recruiterPhone.trim() || null,
+      agency: values.recruiterAgency.trim() || null,
+    };
+
+    // One request saves the call with its opportunity, recruiter and follow-up atomically.
+    const saved = await submit.run(
+      () =>
+        actions.saveCall(
+          {
+            opportunity:
+              values.opportunityId === NEW
+                ? { create: { ...opportunityData, stage: "recruiter_screen" } }
+                : { id: values.opportunityId, update: opportunityData },
+            recruiter:
+              values.recruiterId === NONE
+                ? null
+                : values.recruiterId === NEW
+                  ? { create: recruiterData }
+                  : { id: values.recruiterId, update: recruiterData },
+            followUp: values.nextAction.trim() ? { title: values.nextAction.trim(), dueDate: values.followUpDate } : null,
+            callAt: new Date(values.callDateTime).toISOString(),
+            durationMinutes: Number(values.durationMinutes),
+            hiringManagerPriorities: parseLines(values.hiringManagerPriorities),
+            interviewStages: parseLines(values.interviewStages),
+            recruiterAdvice: values.recruiterAdvice.trim(),
+            technicalTopics: parseList(values.technicalTopics),
+            behavioralThemes: parseLines(values.behavioralThemes),
+            candidateQuestions: values.candidateQuestions
+              .filter((q) => q.question.trim())
+              .map((q) => ({ question: q.question.trim(), answer: q.answer.trim() })),
+            redFlags: parseLines(values.redFlags),
+            interestLevel: values.interestLevel,
+            notes: values.notes,
+          },
+          call?.id,
+        ),
+      { success: call ? "Call saved" : "Call logged" },
     );
-
-    const existingOpp = findById(data.opportunities, values.opportunityId);
-    const opportunityId = actions.saveOpportunity(
-      {
-        companyName: values.companyName,
-        recruiterId: existingOpp?.recruiterId ?? recruiterId,
-        title: values.jobTitle.trim(),
-        location: values.location.trim(),
-        workMode: values.workMode,
-        employmentType: values.employmentType,
-        compensation: values.compMin
-          ? { min: Number(values.compMin), max: Number(values.compMax), currency: "USD", period: values.compPeriod }
-          : undefined,
-        stage: existingOpp?.stage ?? "recruiter_screen",
-        jobDescription: values.jobDescription.trim(),
-        requiredSkills: parseList(values.requiredSkills),
-        preferredSkills: parseList(values.preferredSkills),
-      },
-      existingOpp?.id,
-    );
-
-    const callId = actions.saveCall(
-      {
-        opportunityId,
-        recruiterId,
-        callDateTime: new Date(values.callDateTime).toISOString(),
-        durationMinutes: Number(values.durationMinutes),
-        hiringManagerPriorities: parseLines(values.hiringManagerPriorities),
-        interviewStages: parseLines(values.interviewStages),
-        recruiterAdvice: values.recruiterAdvice.trim(),
-        technicalTopics: parseList(values.technicalTopics),
-        behavioralThemes: parseLines(values.behavioralThemes),
-        candidateQuestions: values.candidateQuestions.filter((q) => q.question.trim() || q.answer.trim()),
-        redFlags: parseLines(values.redFlags),
-        interestLevel: values.interestLevel,
-        notes: values.notes,
-      },
-      call?.id,
-    );
-
-    const existingFollowUp = call ? getCallFollowUp(data, call.id) : undefined;
-    if (values.nextAction.trim()) {
-      actions.saveFollowUp({
-        id: existingFollowUp?.id,
-        opportunityId,
-        callId,
-        title: values.nextAction.trim(),
-        dueDate: fromDateInputValue(values.followUpDate),
-        completed: existingFollowUp?.completed ?? false,
-        completedAt: existingFollowUp?.completedAt,
-      });
-    } else if (existingFollowUp) {
-      actions.deleteFollowUp(existingFollowUp.id);
-    }
-
-    router.push(`/calls/${callId}`);
+    if (saved) router.push(`/calls/${saved.id}`);
   }
 
   const errorKeys = Object.keys(errors) as FieldKey[];
@@ -364,6 +357,7 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NEW}>+ New recruiter</SelectItem>
+                <SelectItem value={NONE}>No recruiter</SelectItem>
                 {data.recruiters.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     {r.name}
@@ -393,7 +387,7 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
           <Card>
             <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field id="call-rec-name" label="Recruiter name" required error={errors.recruiterName}>
-                <Input {...fieldAria("call-rec-name", errors.recruiterName)} value={values.recruiterName} onChange={(e) => set("recruiterName", e.target.value)} />
+                <Input {...fieldAria("call-rec-name", errors.recruiterName)} value={values.recruiterName} onChange={(e) => set("recruiterName", e.target.value)} disabled={values.recruiterId === NONE} />
               </Field>
               <Field id="call-company" label="Company" required error={errors.companyName} hint="Hiring company for this role">
                 <Input
@@ -409,13 +403,13 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
                 </datalist>
               </Field>
               <Field id="call-rec-email" label="Email" error={errors.recruiterEmail}>
-                <Input {...fieldAria("call-rec-email", errors.recruiterEmail)} type="email" value={values.recruiterEmail} onChange={(e) => set("recruiterEmail", e.target.value)} />
+                <Input {...fieldAria("call-rec-email", errors.recruiterEmail)} type="email" value={values.recruiterEmail} onChange={(e) => set("recruiterEmail", e.target.value)} disabled={values.recruiterId === NONE} />
               </Field>
               <Field id="call-rec-phone" label="Phone number">
-                <Input id="call-rec-phone" type="tel" value={values.recruiterPhone} onChange={(e) => set("recruiterPhone", e.target.value)} />
+                <Input id="call-rec-phone" type="tel" value={values.recruiterPhone} onChange={(e) => set("recruiterPhone", e.target.value)} disabled={values.recruiterId === NONE} />
               </Field>
               <Field id="call-rec-agency" label="Agency" hint="Leave empty for in-house recruiters">
-                <Input {...fieldAria("call-rec-agency", undefined, "hint")} value={values.recruiterAgency} onChange={(e) => set("recruiterAgency", e.target.value)} />
+                <Input {...fieldAria("call-rec-agency", undefined, "hint")} value={values.recruiterAgency} onChange={(e) => set("recruiterAgency", e.target.value)} disabled={values.recruiterId === NONE} />
               </Field>
               <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-3">
                 <Field id="call-datetime" label="Call date and time" required error={errors.callDateTime}>
@@ -573,6 +567,8 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
         </TabsContent>
       </Tabs>
 
+      <FormError message={submit.error} />
+
       <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
           {call ? "Recordings are managed on the call's Recording tab." : "You can attach a recording after saving the call."}
@@ -581,7 +577,9 @@ export function CallForm({ call, presetOpportunityId }: { call?: RecruiterCall; 
           <Button type="button" variant="outline" onClick={() => router.push(cancelHref)}>
             Cancel
           </Button>
-          <Button type="submit">{call ? "Save changes" : "Save call"}</Button>
+          <Button type="submit" disabled={submit.pending}>
+            {submit.pending ? "Saving…" : call ? "Save changes" : "Save call"}
+          </Button>
         </div>
       </div>
     </form>

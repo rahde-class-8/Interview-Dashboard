@@ -6,6 +6,7 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Brand, NavLinks } from "./nav-links";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -24,6 +25,9 @@ export function MobileNav() {
           <Brand />
         </div>
         <NavLinks onNavigate={() => setOpen(false)} />
+        <div className="mt-auto">
+          <WorkspaceSwitcher onSwitch={() => setOpen(false)} />
+        </div>
       </SheetContent>
     </Sheet>
   );

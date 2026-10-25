@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAppStore } from "@/lib/store/app-store";
 import { findById } from "@/lib/store/selectors";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
 import type { InterviewQuestion, QuestionDifficulty } from "@/types";
 import { QuestionFormDialog } from "./question-form-dialog";
@@ -29,6 +31,7 @@ const DIFFICULTY_VARIANT: Record<QuestionDifficulty, "success" | "warning" | "de
 };
 
 export function QuestionsPage() {
+  const { canEdit } = usePermissions();
   const { data } = useAppStore();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
@@ -54,13 +57,15 @@ export function QuestionsPage() {
         title="Question Bank"
         description="Technical, behavioral and company-specific questions with your answer notes."
         actions={
-          <QuestionFormDialog
-            trigger={
-              <Button>
-                <Plus /> Add question
-              </Button>
-            }
-          />
+          canEdit && (
+            <QuestionFormDialog
+              trigger={
+                <Button>
+                  <Plus /> Add question
+                </Button>
+              }
+            />
+          )
         }
       />
 
@@ -147,6 +152,9 @@ export function QuestionsPage() {
 function QuestionCard({ question }: { question: InterviewQuestion }) {
   const { data } = useAppStore();
   const { saveQuestion, deleteQuestion } = useActions();
+  const { canEdit } = usePermissions();
+  const mutate = useMutation();
+  const [savingNotes, setSavingNotes] = useState(false);
   const company = findById(data.companies, question.companyId);
   const [draft, setDraft] = useState(question.answerNotes);
   // Keep the draft in sync when notes change elsewhere (e.g. the edit dialog).
@@ -175,6 +183,7 @@ function QuestionCard({ question }: { question: InterviewQuestion }) {
               {company && <Badge variant="outline">{company.name}</Badge>}
             </div>
           </div>
+          {canEdit && (
           <div className="flex shrink-0">
             <QuestionFormDialog
               question={question}
@@ -186,7 +195,7 @@ function QuestionCard({ question }: { question: InterviewQuestion }) {
             />
             <ConfirmDeleteDialog
               title="Delete question?"
-              description="This question and your answer notes will be removed from this prototype session."
+              description="This question and its answer notes will be permanently deleted for everyone in this workspace."
               onConfirm={() => deleteQuestion(question.id)}
               trigger={
                 <Button variant="ghost" size="icon-sm" aria-label="Delete question">
@@ -195,24 +204,35 @@ function QuestionCard({ question }: { question: InterviewQuestion }) {
               }
             />
           </div>
+          )}
         </div>
         <details className="group rounded-md border bg-muted/30">
           <summary className="cursor-pointer rounded-md px-3 py-2 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50">
-            {question.answerNotes ? "Your answer notes" : "Add answer notes"}
+            {question.answerNotes ? "Answer notes" : canEdit ? "Add answer notes" : "No answer notes yet"}
           </summary>
           <div className="space-y-2 px-3 pb-3">
             <label htmlFor={notesId} className="sr-only">
               Personal answer notes
             </label>
-            <Textarea id={notesId} rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} />
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="ghost" disabled={!dirty} onClick={() => setDraft(question.answerNotes)}>
-                Discard
-              </Button>
-              <Button size="sm" disabled={!dirty} onClick={() => saveQuestion({ ...question, answerNotes: draft })}>
-                Save notes
-              </Button>
-            </div>
+            <Textarea id={notesId} rows={3} value={draft} readOnly={!canEdit} onChange={(e) => setDraft(e.target.value)} />
+            {canEdit && (
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" disabled={!dirty || savingNotes} onClick={() => setDraft(question.answerNotes)}>
+                  Discard
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!dirty || savingNotes}
+                  onClick={async () => {
+                    setSavingNotes(true);
+                    await mutate(() => saveQuestion({ answerNotes: draft }, question.id), "Notes saved");
+                    setSavingNotes(false);
+                  }}
+                >
+                  {savingNotes ? "Saving…" : "Save notes"}
+                </Button>
+              </div>
+            )}
           </div>
         </details>
       </Card>

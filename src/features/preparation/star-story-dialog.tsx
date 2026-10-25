@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { parseList } from "@/lib/format";
 import { useActions } from "@/lib/store/use-actions";
+import { FormError } from "@/components/shared/form-error";
+import { useSubmit } from "@/lib/hooks/use-submit";
 import type { StarStory } from "@/types";
 
 const STAR_FIELDS = [
@@ -29,6 +31,7 @@ const STAR_FIELDS = [
 export function StarStoryDialog({ story, trigger }: { story?: StarStory; trigger: ReactNode }) {
   const { saveStarStory } = useActions();
   const [open, setOpen] = useState(false);
+  const submit = useSubmit();
   const [values, setValues] = useState(init);
   const [error, setError] = useState("");
 
@@ -43,14 +46,17 @@ export function StarStoryDialog({ story, trigger }: { story?: StarStory; trigger
     };
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!values.title.trim()) {
       setError("Give the story a short title.");
       return;
     }
-    saveStarStory({ id: story?.id, ...values, title: values.title.trim(), themes: parseList(values.themes) });
-    setOpen(false);
+    const saved = await submit.run(
+      () => saveStarStory({ ...values, title: values.title.trim(), themes: parseList(values.themes) }, story?.id),
+      { success: story ? "Story saved" : "Story added" },
+    );
+    if (saved) setOpen(false);
   }
 
   return (
@@ -59,6 +65,7 @@ export function StarStoryDialog({ story, trigger }: { story?: StarStory; trigger
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
+          submit.reset();
           setValues(init());
           setError("");
         }
@@ -83,12 +90,13 @@ export function StarStoryDialog({ story, trigger }: { story?: StarStory; trigger
             <Input {...fieldAria("star-themes", undefined, "hint")} value={values.themes} onChange={(e) => setValues((v) => ({ ...v, themes: e.target.value }))} />
           </Field>
         </form>
+        <FormError message={submit.error} />
         <DialogFooter>
           <Button variant="outline" type="button" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button type="submit" form="star-form">
-            {story ? "Save story" : "Add story"}
+          <Button type="submit" form="star-form" disabled={submit.pending}>
+            {submit.pending ? "Saving…" : story ? "Save story" : "Add story"}
           </Button>
         </DialogFooter>
       </DialogContent>

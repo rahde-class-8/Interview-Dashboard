@@ -28,7 +28,10 @@ import {
 } from "@/lib/format";
 import { useAppStore } from "@/lib/store/app-store";
 import { findById, getCallFollowUp, getCallRecordings, isOverdue } from "@/lib/store/selectors";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
+import { useToast } from "@/components/ui/toaster";
 import type { ID } from "@/types";
 import { CallForm } from "./call-form";
 
@@ -38,6 +41,9 @@ type ViewTab = (typeof VIEW_TABS)[number];
 export function CallDetailPage({ callId }: { callId: ID }) {
   const { data } = useAppStore();
   const { deleteCall, toggleFollowUp } = useActions();
+  const { canEdit } = usePermissions();
+  const mutate = useMutation();
+  const toast = useToast();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -49,7 +55,7 @@ export function CallDetailPage({ callId }: { callId: ID }) {
       <EmptyState
         icon={SearchX}
         title="Recruiter call not found"
-        description="It may have been deleted in this session, or the link is incorrect."
+        description="It may have been deleted, or the link is incorrect."
         action={
           <Button asChild>
             <Link href="/calls">Back to calls</Link>
@@ -63,18 +69,19 @@ export function CallDetailPage({ callId }: { callId: ID }) {
   const company = findById(data.companies, opportunity?.companyId);
   const recruiter = findById(data.recruiters, call.recruiterId);
   const followUp = getCallFollowUp(data, call.id);
-  const recordings = getCallRecordings(data, call.id);
-  const editing = searchParams.get("edit") === "1";
+  const recordings = getCallRecordings(data, call.id).filter((r) => r.status === "uploaded");
+  const editing = canEdit && searchParams.get("edit") === "1";
   const tabParam = searchParams.get("tab");
   const tab: ViewTab = (VIEW_TABS as readonly string[]).includes(tabParam ?? "") ? (tabParam as ViewTab) : "overview";
 
-  const title = `${recruiter?.name ?? "Unknown recruiter"} · ${company?.name ?? "Unknown company"}`;
+  const title = `${recruiter?.name ?? "No recruiter"} · ${company?.name ?? "Unknown company"}`;
 
   if (editing) {
     return (
       <>
         <PageHeader title="Edit recruiter call" description={title} />
-        <CallForm key={call.updatedAt} call={call} />
+        {/* Keyed by id: background refreshes must not reset a form being edited. */}
+        <CallForm key={call.id} call={call} />
       </>
     );
   }
@@ -102,6 +109,7 @@ export function CallDetailPage({ callId }: { callId: ID }) {
           </span>
         }
         actions={
+          canEdit && (
           <>
             <Button asChild variant="outline">
               <Link href={`/calls/${call.id}?edit=1`}>
@@ -110,10 +118,11 @@ export function CallDetailPage({ callId }: { callId: ID }) {
             </Button>
             <ConfirmDeleteDialog
               title="Delete this recruiter call?"
-              description="The call, its recording attachments and its follow-ups will be removed from this prototype session. The linked opportunity is kept."
+              description="The call, its recordings and its follow-up will be permanently deleted for everyone in this workspace. The linked opportunity is kept."
               confirmLabel="Delete call"
-              onConfirm={() => {
-                deleteCall(call.id);
+              onConfirm={async () => {
+                await deleteCall(call.id);
+                toast.success("Call deleted");
                 router.push("/calls");
               }}
               trigger={
@@ -123,6 +132,7 @@ export function CallDetailPage({ callId }: { callId: ID }) {
               }
             />
           </>
+          )
         }
       />
 
@@ -268,7 +278,8 @@ export function CallDetailPage({ callId }: { callId: ID }) {
                   id="call-followup-done"
                   className="mt-0.5"
                   checked={followUp.completed}
-                  onCheckedChange={() => toggleFollowUp(followUp.id)}
+                  disabled={!canEdit}
+                  onCheckedChange={() => void mutate(() => toggleFollowUp(followUp))}
                 />
                 <label htmlFor="call-followup-done" className="cursor-pointer text-sm">
                   <span className={followUp.completed ? "text-muted-foreground line-through" : "font-medium"}>
@@ -285,7 +296,7 @@ export function CallDetailPage({ callId }: { callId: ID }) {
                 </label>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No next action set. Edit the call to add one.</p>
+              <p className="text-sm text-muted-foreground">No next action set.{canEdit ? " Edit the call to add one." : ""}</p>
             )}
           </Section>
           <Section title="Call notes" className="lg:col-span-2">

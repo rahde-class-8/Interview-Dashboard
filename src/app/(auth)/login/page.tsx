@@ -33,6 +33,12 @@ export default async function LoginPage({
         </p>
       }
     >
+      {next.startsWith("/invite/") && (
+        <p className="mb-4 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          Sign in with the email address the invitation was sent to. New here? Create an account with that address,
+          confirm it, then open the invitation link again.
+        </p>
+      )}
       <LoginForm next={next || undefined} notice={notice} />
     </AuthCard>
   );

@@ -127,12 +127,12 @@ connections that are already open.
 | Mechanism | Supabase Realtime **Broadcast from the database** (`realtime.send`) on **private** channels. `postgres_changes` is not used (the `supabase_realtime` publication is empty), so no table data is replicated to clients. |
 | Topic | `workspace:<workspace_id>`, event `change` |
 | Payload | `{ table, op: INSERT\|UPDATE\|DELETE, recordId, workspaceId, id }`, which **identifies** the row only. No content, so nothing a member's role would hide is ever pushed. Clients refetch through the API, which applies RLS. |
-| Tables | D7: `opportunities`, `recruiter_calls`, `interviews`, `preparation_tasks`, `follow_up_tasks`, `comments`, `activity_events`; plus `shared_notes`, `recordings` (metadata changes), `workspace_members` (role changes and removals, `recordId` = user id) and `workspaces` (rename/settings) |
+| Tables | D7: `opportunities`, `recruiter_calls`, `interviews`, `preparation_tasks`, `follow_up_tasks`, `comments`, `activity_events`; plus `shared_notes`, `recordings` (metadata changes), `workspace_members` (role changes and removals, `recordId` = user id), `workspaces` (rename/settings) and, since Phase 7, `companies`, `recruiters`, `questions`, `star_stories` |
 | Join authorization | RLS policy `workspace_members_receive_broadcasts` on `realtime.messages`: the user must be a member (any role) of the topic's workspace. Malformed topics are denied. |
 | Sending | No INSERT policy → clients cannot publish or forge messages, and presence is not available |
 | Token | `GET /api/v1/realtime/token` returns the user's short-lived access token for `supabase.realtime.setAuth()`; session cookies stay HTTP-only and the refresh token is never exposed |
 
-Browser usage (Phase 7):
+Browser usage (implemented in `src/lib/store/use-realtime-sync.ts`, see FRONTEND_INTEGRATION.md):
 
 ```ts
 const { accessToken } = await (await fetch("/api/v1/realtime/token")).json();

@@ -2,10 +2,10 @@ import "server-only";
 
 import type { NextRequest } from "next/server";
 
-import { commentCreateSchema, commentListQuerySchema, commentUpdateSchema, type Comment } from "@/shared/contracts/collaboration";
+import { commentCreateSchema, commentListQuerySchema, commentUpdateSchema, workspaceCommentListQuerySchema, type Comment } from "@/shared/contracts/collaboration";
 import type { Page } from "@/shared/contracts/common";
 import { check, checkMaybe, json, noContent, parseId, readBody, readQuery, requireWorkspace, type ApiContext } from "../core/api";
-import type { ItemParams } from "../core/crud";
+import type { ItemParams, WorkspaceParams } from "../core/crud";
 import { ApiError, forbidden, notFound } from "../core/errors";
 import { decodeCursor, pageRange, toPage } from "../core/pagination";
 import type { Row } from "../core/rows";
@@ -64,6 +64,20 @@ export const comments = {
         .order("created_at")
         .order("id")
         .range(...pageRange(params.limit, offset)),
+      "Comment",
+    ) as CommentRow[];
+    return json<Page<Comment>>(toPage(rows, params.limit, offset, toComment));
+  },
+
+  /** GET /comments?noteId= — any member; all comment threads, oldest first. */
+  async listForWorkspace(request: NextRequest, ctx: ApiContext<WorkspaceParams>) {
+    await requireWorkspace(ctx, ctx.params.workspaceId, "viewer");
+    const params = readQuery(request, workspaceCommentListQuerySchema);
+    const offset = decodeCursor(params.cursor);
+    let query = ctx.supabase.from("comments").select(SELECT).eq("workspace_id", ctx.params.workspaceId);
+    if (params.noteId) query = query.eq("note_id", params.noteId);
+    const rows = check(
+      await query.order("created_at").order("id").range(...pageRange(params.limit, offset)),
       "Comment",
     ) as CommentRow[];
     return json<Page<Comment>>(toPage(rows, params.limit, offset, toComment));

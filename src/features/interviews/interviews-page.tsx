@@ -9,6 +9,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNow } from "@/hooks/use-now";
 import { useAppStore } from "@/lib/store/app-store";
+import { usePermissions } from "@/lib/store/permissions";
 import { getUpcomingInterviews, isOverdue, isUpcomingInterview, sortByDateDesc } from "@/lib/store/selectors";
 import { FollowUpList } from "./follow-up-list";
 import { InterviewFormDialog } from "./interview-form-dialog";
@@ -17,6 +18,7 @@ import { InterviewList } from "./interview-list";
 type FollowUpFilter = "pending" | "completed" | "all";
 
 export function InterviewsPage() {
+  const { canEdit } = usePermissions();
   const { data } = useAppStore();
   const now = useNow();
   const [filter, setFilter] = useState<FollowUpFilter>("pending");
@@ -39,13 +41,15 @@ export function InterviewsPage() {
         title="Interviews & Follow-ups"
         description="Scheduled interviews, outcomes, and the follow-ups that keep things moving."
         actions={
-          <InterviewFormDialog
-            trigger={
-              <Button>
-                <Plus /> Schedule interview
-              </Button>
-            }
-          />
+          canEdit && (
+            <InterviewFormDialog
+              trigger={
+                <Button>
+                  <Plus /> Schedule interview
+                </Button>
+              }
+            />
+          )
         }
       />
 

@@ -3,6 +3,8 @@
 import { Check } from "lucide-react";
 
 import { STAGE_LABELS } from "@/lib/format";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
 import { cn } from "@/lib/utils";
 import { OPPORTUNITY_STAGES, type Opportunity } from "@/types";
@@ -10,6 +12,8 @@ import { OPPORTUNITY_STAGES, type Opportunity } from "@/types";
 /** Clickable pipeline progress: New → Recruiter Screen → … → Closed. */
 export function StageStepper({ opportunity }: { opportunity: Opportunity }) {
   const { setOpportunityStage } = useActions();
+  const mutate = useMutation();
+  const { canEdit } = usePermissions();
   const currentIndex = OPPORTUNITY_STAGES.indexOf(opportunity.stage);
 
   return (
@@ -21,13 +25,14 @@ export function StageStepper({ opportunity }: { opportunity: Opportunity }) {
           <li key={stage}>
             <button
               type="button"
-              onClick={() => setOpportunityStage(opportunity.id, stage)}
+              onClick={() => void mutate(() => setOpportunityStage(opportunity.id, stage))}
+              disabled={!canEdit}
               aria-current={current ? "step" : undefined}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 cursor-pointer",
+                "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-xs font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 cursor-pointer disabled:cursor-default",
                 current && "border-primary bg-primary text-primary-foreground",
                 done && "border-primary/30 bg-accent text-accent-foreground",
-                !current && !done && "text-muted-foreground hover:bg-muted",
+                !current && !done && "text-muted-foreground enabled:hover:bg-muted",
               )}
             >
               <span

@@ -32,6 +32,8 @@ import { useNow } from "@/hooks/use-now";
 import { formatDate, formatDateTime, formatDuration, STAGE_LABELS } from "@/lib/format";
 import { useAppStore } from "@/lib/store/app-store";
 import { getCallRows, isOverdue, type CallRow } from "@/lib/store/selectors";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
 import { cn } from "@/lib/utils";
 import { OPPORTUNITY_STAGES, type OpportunityStage } from "@/types";
@@ -39,6 +41,8 @@ import { OPPORTUNITY_STAGES, type OpportunityStage } from "@/types";
 export function CallsPage() {
   const { data } = useAppStore();
   const { deleteCall } = useActions();
+  const { canEdit } = usePermissions();
+  const mutate = useMutation();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<OpportunityStage | "all">("all");
   const [pendingDelete, setPendingDelete] = useState<CallRow | null>(null);
@@ -57,11 +61,13 @@ export function CallsPage() {
         title="Recruiter Calls"
         description="Notes, recordings and intelligence from every recruiter conversation."
         actions={
-          <Button asChild>
-            <Link href="/calls/new">
-              <Plus /> New call
-            </Link>
-          </Button>
+          canEdit && (
+            <Button asChild>
+              <Link href="/calls/new">
+                <Plus /> New call
+              </Link>
+            </Button>
+          )
         }
       />
 
@@ -101,7 +107,7 @@ export function CallsPage() {
           title={allRows.length ? "No calls match your filters" : "No recruiter calls yet"}
           description={allRows.length ? "Try a different search or status." : "Log your first recruiter conversation."}
           action={
-            !allRows.length && (
+            !allRows.length && canEdit && (
               <Button asChild size="sm">
                 <Link href="/calls/new">Log a call</Link>
               </Button>
@@ -151,7 +157,7 @@ export function CallsPage() {
                       <RecordingIndicator count={row.recordingCount} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <RowActions row={row} onDelete={() => setPendingDelete(row)} />
+                      <RowActions row={row} canEdit={canEdit} onDelete={() => setPendingDelete(row)} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -172,7 +178,7 @@ export function CallsPage() {
                         {row.companyName} · {row.jobTitle}
                       </p>
                     </div>
-                    <RowActions row={row} onDelete={() => setPendingDelete(row)} />
+                    <RowActions row={row} canEdit={canEdit} onDelete={() => setPendingDelete(row)} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     {formatDate(row.call.callDateTime)} · {formatDuration(row.call.durationMinutes)}
@@ -195,16 +201,17 @@ export function CallsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this recruiter call?</AlertDialogTitle>
             <AlertDialogDescription>
-              The call with {pendingDelete?.recruiterName} ({pendingDelete?.companyName}) and its recording attachments
-              and follow-ups will be removed from this prototype session. The linked opportunity is kept.
+              The call with {pendingDelete?.recruiterName} ({pendingDelete?.companyName}), its recordings and its
+              follow-up will be permanently deleted for everyone in this workspace. The linked opportunity is kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (pendingDelete) deleteCall(pendingDelete.call.id);
+                const target = pendingDelete;
                 setPendingDelete(null);
+                if (target) void mutate(() => deleteCall(target.call.id), "Call deleted");
               }}
             >
               Delete call
@@ -242,7 +249,7 @@ function RecordingIndicator({ count }: { count: number }) {
   );
 }
 
-function RowActions({ row, onDelete }: { row: CallRow; onDelete: () => void }) {
+function RowActions({ row, canEdit, onDelete }: { row: CallRow; canEdit: boolean; onDelete: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -256,14 +263,18 @@ function RowActions({ row, onDelete }: { row: CallRow; onDelete: () => void }) {
             <Eye /> View details
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href={`/calls/${row.call.id}?edit=1`}>
-            <Pencil /> Edit
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-          <Trash2 /> Delete
-        </DropdownMenuItem>
+        {canEdit && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href={`/calls/${row.call.id}?edit=1`}>
+                <Pencil /> Edit
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+              <Trash2 /> Delete
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

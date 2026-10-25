@@ -60,13 +60,14 @@ export const notes = {
     await requireWorkspace(ctx, ctx.params.workspaceId, "viewer");
     const params = readQuery(request, noteListQuerySchema);
     const offset = decodeCursor(params.cursor);
-    let query = ctx.supabase.from("shared_notes").select(SUMMARY_SELECT).eq("workspace_id", ctx.params.workspaceId);
+    const detail = params.view === "detail";
+    let query = ctx.supabase.from("shared_notes").select(detail ? DETAIL_SELECT : SUMMARY_SELECT).eq("workspace_id", ctx.params.workspaceId);
     if (params.opportunityId) query = query.eq("opportunity_id", params.opportunityId);
     const rows = check(
       await query.order("updated_at", { ascending: false }).order("id").range(...pageRange(params.limit, offset)),
       "Note",
-    ) as Omit<NoteRow, "body">[];
-    return json<Page<SharedNoteSummary>>(toPage(rows, params.limit, offset, toSummary));
+    ) as unknown as NoteRow[];
+    return json<Page<SharedNoteSummary | SharedNote>>(toPage(rows, params.limit, offset, detail ? toNote : toSummary));
   },
 
   async create(request: NextRequest, ctx: ApiContext<WorkspaceParams>) {

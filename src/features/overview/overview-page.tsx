@@ -19,7 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FICTIONAL_DATA_NOTICE } from "@/data/mock-data";
 import { useNow } from "@/hooks/use-now";
 import { formatDate, formatDuration, formatRelativeDay, STAGE_LABELS } from "@/lib/format";
 import { useAppStore } from "@/lib/store/app-store";
@@ -30,6 +29,8 @@ import {
   getSkillFrequency,
   sortByDateAsc,
 } from "@/lib/store/selectors";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { ROLE_LABELS, usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
 import { cn } from "@/lib/utils";
 import { OPPORTUNITY_STAGES } from "@/types";
@@ -45,7 +46,12 @@ export function OverviewPage() {
         title={`Welcome back, ${data.currentUser.name.split(" ")[0]}`}
         description="Your recruiter conversations, pipeline and preparation at a glance."
       />
-      <PrototypeNotice className="mb-6">{FICTIONAL_DATA_NOTICE} Changes are kept in memory and reset on page reload.</PrototypeNotice>
+      {data.workspace.role !== "owner" && (
+        <PrototypeNotice className="mb-6">
+          You&apos;re viewing the shared workspace “{data.workspace.name}” as {ROLE_LABELS[data.workspace.role].toLowerCase()}.
+          {data.workspace.role === "viewer" || data.workspace.role === "commenter" ? " Editing is limited to editors and the owner." : ""}
+        </PrototypeNotice>
+      )}
 
       <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Total recruiter calls" value={metrics.totalCalls} icon={PhoneCall} href="/calls" />
@@ -216,6 +222,8 @@ function Pipeline() {
 function PrepTasks({ className }: { className?: string }) {
   const { data } = useAppStore();
   const { togglePrepTask } = useActions();
+  const { canEdit } = usePermissions();
+  const mutate = useMutation();
   const now = useNow();
   const tasks = sortByDateAsc(
     data.preparationTasks.filter((t) => !t.completed),
@@ -250,7 +258,8 @@ function PrepTasks({ className }: { className?: string }) {
                     id={checkboxId}
                     className="mt-0.5"
                     checked={task.completed}
-                    onCheckedChange={() => togglePrepTask(task.id)}
+                    disabled={!canEdit}
+                    onCheckedChange={() => void mutate(() => togglePrepTask(task), "Task completed")}
                   />
                   <label htmlFor={checkboxId} className="min-w-0 flex-1 cursor-pointer">
                     <span className="block text-sm">{task.title}</span>

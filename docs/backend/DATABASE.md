@@ -202,6 +202,7 @@ still rejected.
 | `20261024191000_workspace_insert_id.sql` | allow the API to supply a new workspace's id (Phase 4) |
 | `20261024200000_recording_storage.sql` | private `recordings` bucket, status guard, quota/limits, retention, rate limits, maintenance functions (Phase 5) |
 | `20261025100000_collaboration_services.sql` | activity triggers, Realtime broadcast triggers + `realtime.messages` policy, invitation checks and `preview_invitation`, comment soft delete, note authorship, case-insensitive `accept_invitation` fix (Phase 6) |
+| `20261025120000_broadcast_reference_data.sql` | Realtime change notifications for companies, recruiters, questions, STAR stories (Phase 7) |
 
 ### 7.1 Commands
 

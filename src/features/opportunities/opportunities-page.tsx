@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useNow } from "@/hooks/use-now";
 import { formatCompensation, STAGE_LABELS, WORK_MODE_LABELS } from "@/lib/format";
 import { useAppStore } from "@/lib/store/app-store";
+import { usePermissions } from "@/lib/store/permissions";
 import { findById, isUpcomingInterview, sortByDateDesc } from "@/lib/store/selectors";
 import { cn } from "@/lib/utils";
 import { OPPORTUNITY_STAGES, type OpportunityStage } from "@/types";
@@ -28,6 +29,7 @@ export function OpportunitiesPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
+  const { canEdit } = usePermissions();
 
   const stageParam = searchParams.get("stage");
   const stage: StageFilter =
@@ -52,14 +54,16 @@ export function OpportunitiesPage() {
         title="Opportunities"
         description="Every role in your pipeline, from first contact to offer."
         actions={
-          <OpportunityFormDialog
-            onSaved={(id) => router.push(`/opportunities/${id}`)}
-            trigger={
-              <Button>
-                <Plus /> New opportunity
-              </Button>
-            }
-          />
+          canEdit && (
+            <OpportunityFormDialog
+              onSaved={(id) => router.push(`/opportunities/${id}`)}
+              trigger={
+                <Button>
+                  <Plus /> New opportunity
+                </Button>
+              }
+            />
+          )
         }
       />
 

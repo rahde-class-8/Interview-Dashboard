@@ -9,17 +9,28 @@ import { formatSeconds } from "@/lib/format";
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 2];
 
-/** Accessible audio player with play/pause, seek, skip, mute and speed. */
+/**
+ * Accessible audio player with play/pause, seek, skip, mute and speed.
+ * `refreshSource` handles short-lived signed URLs: when the source fails (e.g.
+ * expired), a fresh URL is requested and playback resumes at the same position.
+ */
 export function AudioPlayer({
-  src,
+  src: initialSrc,
   label,
   onDuration,
+  refreshSource,
+  autoPlay = false,
 }: {
   src: string;
   label: string;
   onDuration?: (seconds: number) => void;
+  refreshSource?: () => Promise<string>;
+  autoPlay?: boolean;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [src, setSrc] = useState(initialSrc);
+  const resume = useRef<{ at: number; play: boolean } | null>(null);
+  const refreshAttempts = useRef(0);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -27,14 +38,30 @@ export function AudioPlayer({
   const [rate, setRate] = useState(1);
   const [error, setError] = useState<string>();
 
-  // Reset state whenever the source changes (file replaced).
-  const [lastSrc, setLastSrc] = useState(src);
-  if (src !== lastSrc) {
-    setLastSrc(src);
+  // Reset state whenever a different recording is shown.
+  const [lastSrc, setLastSrc] = useState(initialSrc);
+  if (initialSrc !== lastSrc) {
+    setLastSrc(initialSrc);
+    setSrc(initialSrc);
     setPlaying(false);
     setCurrent(0);
     setDuration(0);
     setError(undefined);
+  }
+
+  async function handleSourceError() {
+    const audio = audioRef.current;
+    if (refreshSource && audio && refreshAttempts.current < 2) {
+      refreshAttempts.current += 1;
+      resume.current = { at: audio.currentTime || current, play: playing };
+      try {
+        setSrc(await refreshSource());
+        return;
+      } catch {
+        // fall through to the error message
+      }
+    }
+    setError(refreshSource ? "The recording could not be loaded. Try again later." : "This browser could not decode the audio file.");
   }
 
   useEffect(() => {
@@ -74,20 +101,30 @@ export function AudioPlayer({
       <audio
         ref={audioRef}
         src={src}
+        autoPlay={autoPlay}
         preload="metadata"
         muted={muted}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
-        onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => {
+          setCurrent(e.currentTarget.currentTime);
+          refreshAttempts.current = 0;
+        }}
         onLoadedMetadata={(e) => {
-          const d = e.currentTarget.duration;
+          const audio = e.currentTarget;
+          const d = audio.duration;
           if (Number.isFinite(d)) {
             setDuration(d);
             onDuration?.(Math.round(d));
           }
+          if (resume.current) {
+            audio.currentTime = resume.current.at;
+            if (resume.current.play) void audio.play().catch(() => undefined);
+            resume.current = null;
+          }
         }}
-        onError={() => setError("This browser could not decode the audio file.")}
+        onError={() => void handleSourceError()}
       />
       <div className="flex flex-wrap items-center gap-2">
         <Button

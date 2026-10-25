@@ -16,24 +16,34 @@ export interface User {
   title: string;
 }
 
+export type WorkspaceRole = "owner" | "editor" | "commenter" | "viewer";
+
 export interface Workspace {
   id: ID;
   name: string;
   ownerId: ID;
+  /** The signed-in user's role in this workspace. */
+  role: WorkspaceRole;
+  recordingRetentionDays: 30 | 90 | 180 | 365 | null;
   createdAt: ISODateString;
 }
 
 export type CollaboratorRole = "viewer" | "commenter" | "editor";
 
+/** A workspace member, or a pending invitation (kind "invitation"). */
 export interface Collaborator {
+  /** The member's user id, or the invitation id. */
   id: ID;
+  kind: "member" | "invitation";
   workspaceId: ID;
   name: string;
   email: string;
-  role: CollaboratorRole;
-  /** "pending" means the invite exists only in local prototype state. */
-  status: "active" | "pending";
+  role: WorkspaceRole;
+  status: "active" | "pending" | "expired";
+  isYou: boolean;
+  /** Joined (members) or invited (invitations) at. */
   invitedAt: ISODateString;
+  expiresAt?: ISODateString;
 }
 
 export interface Company {
@@ -52,7 +62,7 @@ export interface Recruiter {
   /** Agency name for third-party recruiters; omitted for in-house recruiters. */
   agency?: string;
   /** The company the recruiter primarily hires for. */
-  companyId: ID;
+  companyId?: ID;
 }
 
 export const OPPORTUNITY_STAGES = [
@@ -79,7 +89,7 @@ export interface CompensationRange {
 export interface Opportunity {
   id: ID;
   companyId: ID;
-  recruiterId: ID;
+  recruiterId?: ID;
   title: string;
   location: string;
   workMode: WorkMode;
@@ -104,7 +114,7 @@ export interface CandidateQuestion {
 export interface RecruiterCall {
   id: ID;
   opportunityId: ID;
-  recruiterId: ID;
+  recruiterId?: ID;
   callDateTime: ISODateString;
   durationMinutes: number;
   hiringManagerPriorities: string[];
@@ -122,8 +132,8 @@ export interface RecruiterCall {
 }
 
 /**
- * Metadata for a recording created by an external app and attached by the user.
- * In the prototype the binary lives only in browser memory ("local-preview").
+ * Metadata for a recording created by an external app and uploaded by the user.
+ * The audio itself lives in private storage; playback uses short-lived signed URLs.
  */
 export interface RecordingAttachment {
   id: ID;
@@ -132,9 +142,11 @@ export interface RecordingAttachment {
   fileSizeBytes: number;
   mimeType: string;
   durationSeconds?: number;
-  storage: "local-preview" | "remote";
-  /** Populated once a backend stores the file. */
-  remoteUrl?: string;
+  status: "pending" | "uploaded" | "failed";
+  failureReason?: string;
+  uploadedBy?: ID;
+  /** When the recording will be deleted by the workspace retention policy. */
+  deleteAfter?: ISODateString;
   addedAt: ISODateString;
 }
 
@@ -208,6 +220,8 @@ export interface SharedNote {
   title: string;
   body: string;
   opportunityId?: ID;
+  /** Optimistic-concurrency version; saves based on an older version are rejected. */
+  version: number;
   updatedAt: ISODateString;
   updatedBy: string;
 }
@@ -216,8 +230,11 @@ export interface Comment {
   id: ID;
   workspaceId: ID;
   noteId: ID;
+  authorId?: ID;
   authorName: string;
   body: string;
+  deleted: boolean;
+  editedAt?: ISODateString;
   createdAt: ISODateString;
 }
 
@@ -225,7 +242,9 @@ export interface ActivityEvent {
   id: ID;
   workspaceId: ID;
   actorName: string;
-  description: string;
+  /** Full sentence including the actor, e.g. "Sam moved “SRE” to Technical". */
+  summary: string;
+  action: string;
   createdAt: ISODateString;
 }
 

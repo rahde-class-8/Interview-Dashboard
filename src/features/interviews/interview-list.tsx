@@ -20,6 +20,8 @@ import {
 } from "@/lib/format";
 import { useAppStore } from "@/lib/store/app-store";
 import { findById } from "@/lib/store/selectors";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
 import type { Interview, InterviewOutcome, InterviewStatus } from "@/types";
 import { InterviewFormDialog } from "./interview-form-dialog";
@@ -35,7 +37,9 @@ export function InterviewList({
   emptyTitle?: string;
 }) {
   const { data } = useAppStore();
-  const { updateInterview, deleteInterview } = useActions();
+  const { saveInterview, deleteInterview } = useActions();
+  const { canEdit } = usePermissions();
+  const mutate = useMutation();
   const now = useNow();
 
   if (interviews.length === 0) return <EmptyState icon={CalendarClock} title={emptyTitle} />;
@@ -69,7 +73,8 @@ export function InterviewList({
             <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={interview.status}
-                onValueChange={(v) => updateInterview(interview.id, { status: v as InterviewStatus })}
+                disabled={!canEdit}
+                onValueChange={(v) => void mutate(() => saveInterview({ status: v as InterviewStatus }, interview.id))}
               >
                 <SelectTrigger size="sm" className="w-36" aria-label={`Status for ${interview.title}`}>
                   <SelectValue />
@@ -82,7 +87,8 @@ export function InterviewList({
               </Select>
               <Select
                 value={interview.outcome}
-                onValueChange={(v) => updateInterview(interview.id, { outcome: v as InterviewOutcome })}
+                disabled={!canEdit}
+                onValueChange={(v) => void mutate(() => saveInterview({ outcome: v as InterviewOutcome }, interview.id))}
               >
                 <SelectTrigger size="sm" className="w-32" aria-label={`Outcome for ${interview.title}`}>
                   <SelectValue />
@@ -93,6 +99,8 @@ export function InterviewList({
                   ))}
                 </SelectContent>
               </Select>
+              {canEdit && (
+              <>
               <InterviewFormDialog
                 interview={interview}
                 opportunityId={interview.opportunityId}
@@ -104,7 +112,7 @@ export function InterviewList({
               />
               <ConfirmDeleteDialog
                 title="Delete interview?"
-                description={`“${interview.title}” will be removed from this prototype session.`}
+                description={`“${interview.title}” will be permanently deleted for everyone in this workspace.`}
                 onConfirm={() => deleteInterview(interview.id)}
                 trigger={
                   <Button variant="ghost" size="icon-sm" aria-label={`Delete ${interview.title}`}>
@@ -112,6 +120,8 @@ export function InterviewList({
                   </Button>
                 }
               />
+              </>
+              )}
             </div>
           </li>
         );

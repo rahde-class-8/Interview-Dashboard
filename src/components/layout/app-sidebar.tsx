@@ -1,4 +1,5 @@
 import { Brand, NavLinks } from "./nav-links";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 export function AppSidebar() {
   return (
@@ -8,9 +9,9 @@ export function AppSidebar() {
           <Brand />
         </div>
         <NavLinks />
-        <p className="mt-auto rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-          Prototype — data lives in this browser tab only and resets on reload.
-        </p>
+        <div className="mt-auto">
+          <WorkspaceSwitcher />
+        </div>
       </aside>
     </div>
   );

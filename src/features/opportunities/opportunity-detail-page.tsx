@@ -23,7 +23,9 @@ import {
 } from "@/lib/format";
 import { useAppStore } from "@/lib/store/app-store";
 import { findById, getCallRecordings, getOpportunityIntel, sortByDateAsc } from "@/lib/store/selectors";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
+import { useToast } from "@/components/ui/toaster";
 import type { ID } from "@/types";
 import { OpportunityFormDialog } from "./opportunity-form-dialog";
 import { StageStepper } from "./stage-stepper";
@@ -31,6 +33,8 @@ import { StageStepper } from "./stage-stepper";
 export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) {
   const { data } = useAppStore();
   const { deleteOpportunity } = useActions();
+  const { canEdit } = usePermissions();
+  const toast = useToast();
   const router = useRouter();
   const opportunity = findById(data.opportunities, opportunityId);
 
@@ -39,7 +43,7 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
       <EmptyState
         icon={SearchX}
         title="Opportunity not found"
-        description="It may have been deleted in this session, or the link is incorrect."
+        description="It may have been deleted, or the link is incorrect."
         action={
           <Button asChild>
             <Link href="/opportunities">Back to opportunities</Link>
@@ -71,6 +75,7 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
         title={opportunity.title}
         description={`${company?.name ?? "Unknown company"} · ${opportunity.location || "Location TBD"}`}
         actions={
+          canEdit && (
           <>
             <OpportunityFormDialog
               opportunity={opportunity}
@@ -82,9 +87,10 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
             />
             <ConfirmDeleteDialog
               title="Delete this opportunity?"
-              description="This also removes its recruiter calls, recordings, interviews, follow-ups and preparation tasks from this prototype session."
-              onConfirm={() => {
-                deleteOpportunity(opportunity.id);
+              description="This permanently deletes its recruiter calls, recordings, interviews, follow-ups and preparation tasks for everyone in this workspace."
+              onConfirm={async () => {
+                await deleteOpportunity(opportunity.id);
+                toast.success("Opportunity deleted");
                 router.push("/opportunities");
               }}
               trigger={
@@ -94,6 +100,7 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
               }
             />
           </>
+          )
         }
       />
 
@@ -166,13 +173,15 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
           <Card>
             <CardHeader>
               <CardTitle>Recruiter calls</CardTitle>
-              <CardAction>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/calls/new?opportunityId=${opportunity.id}`}>
-                    <Plus /> Log call
-                  </Link>
-                </Button>
-              </CardAction>
+              {canEdit && (
+                <CardAction>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/calls/new?opportunityId=${opportunity.id}`}>
+                      <Plus /> Log call
+                    </Link>
+                  </Button>
+                </CardAction>
+              )}
             </CardHeader>
             <CardContent>
               {intel.calls.length === 0 ? (
@@ -181,7 +190,7 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
                 <ul className="divide-y rounded-lg border">
                   {intel.calls.map((call) => {
                     const r = findById(data.recruiters, call.recruiterId);
-                    const recordings = getCallRecordings(data, call.id).length;
+                    const recordings = getCallRecordings(data, call.id).filter((rec) => rec.status === "uploaded").length;
                     return (
                       <li key={call.id}>
                         <Link
@@ -189,7 +198,7 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
                           className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm outline-none hover:bg-muted/60 focus-visible:bg-muted"
                         >
                           <span>
-                            <span className="font-medium">{r?.name}</span>
+                            <span className="font-medium">{r?.name ?? "No recruiter"}</span>
                             <span className="text-muted-foreground">
                               {" "}
                               · {formatDate(call.callDateTime)} · {formatDuration(call.durationMinutes)}
@@ -211,16 +220,18 @@ export function OpportunityDetailPage({ opportunityId }: { opportunityId: ID }) 
           <Card>
             <CardHeader>
               <CardTitle>Interviews</CardTitle>
-              <CardAction>
-                <InterviewFormDialog
-                  opportunityId={opportunity.id}
-                  trigger={
-                    <Button size="sm" variant="outline">
-                      <Plus /> Schedule
-                    </Button>
-                  }
-                />
-              </CardAction>
+              {canEdit && (
+                <CardAction>
+                  <InterviewFormDialog
+                    opportunityId={opportunity.id}
+                    trigger={
+                      <Button size="sm" variant="outline">
+                        <Plus /> Schedule
+                      </Button>
+                    }
+                  />
+                </CardAction>
+              )}
             </CardHeader>
             <CardContent>
               <InterviewList interviews={interviews} emptyTitle="No interviews scheduled" />

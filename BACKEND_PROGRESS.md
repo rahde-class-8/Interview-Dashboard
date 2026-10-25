@@ -12,7 +12,7 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 | 4 — Application services | **Complete** | Core CRUD operations work |
 | 5 — Recording storage | **Complete** | Authorized uploads and playback work ✅ |
 | 6 — Collaboration | **Complete** | Role-based sharing is enforced ✅ |
-| 7 — Frontend integration | Not Started | Frontend workflows persist real data |
+| 7 — Frontend integration | **Complete** | Frontend workflows persist real data ✅ |
 | 8 — Testing and QA | Not Started | Critical security tests pass |
 | 9 — Deployment and operations | Not Started | Security, recovery and deployment checks pass |
 
@@ -629,5 +629,100 @@ Defects found by the tests and fixed:
 
 ### Next phase
 
-Phase 7 — Frontend integration — awaiting approval.
+Phase 7 — Frontend integration — complete (see below).
+
+---
+
+## Phase 7 — Frontend Integration
+
+**Status:** Complete (2026-10-25). Gate "frontend workflows persist real data": ✅
+(pgTAP 505/505, Vitest 93/93, Playwright 53/53 — 46 API + 7 browser).
+
+### Completed tasks (in the specified integration order)
+
+1. **Authentication** — already server-side (Phase 3); the app shell now passes the signed-in
+   user to the store; 401s redirect to sign-in; sign-out no longer races background requests.
+2. **Workspaces** — store loads the user's workspaces and remembers the active one per
+   browser; workspace switcher (sidebar/mobile); create, rename, retention, delete in Settings.
+3–9. **Companies, recruiters, opportunities, calls, recordings, interviews, questions,
+   preparation tasks, STAR stories, follow-ups** — mock data removed; `AppStoreProvider` loads
+   everything through `/api/v1`; every `useActions` mutation calls the API and stores the
+   server's record. The call form saves call + opportunity + recruiter + follow-up in one
+   request. Recordings: consent, direct-to-storage upload with progress/cancel, server
+   verification, resume after interruption, signed playback with automatic URL refresh,
+   delete.
+10. **Collaboration** — invite by link, `/invite/<token>` accept page, member roles/removal/
+    leave, shared notes with version-conflict resolution, comments (edit/delete/moderate),
+    activity feed, live updates via Realtime (id-only notifications → refetch).
+- **States and feedback**: loading skeleton + retry, empty states, server error messages and
+  field details, read retries, success toasts, optimistic stage/task toggles with rollback.
+- **Permission-aware UI** (`usePermissions`): read-only interface for viewers, comment-only
+  for commenters, playback for owners/editors only, owner-only management.
+- **Backend support**: `GET …/calls?view=detail`, `GET …/notes?view=detail`,
+  `GET …/recordings`, `GET …/comments`; Realtime notifications for companies, recruiters,
+  questions and STAR stories (migration `20261025120000_broadcast_reference_data`).
+- **Docs**: created `docs/backend/FRONTEND_INTEGRATION.md`; rewrote `README.md`; updated
+  `API.md`, `COLLABORATION.md`, `DATABASE.md`; `FRONTEND_PROGRESS.md` marked historical.
+
+### Files created or modified
+
+- Created: `src/lib/api/{client,mappers,workspace-data}.ts`, `src/lib/store/{permissions,use-realtime-sync}.ts`,
+  `src/lib/hooks/use-submit.ts`, `src/lib/supabase/realtime-client.ts`, `src/components/ui/toaster.tsx`,
+  `src/components/shared/form-error.tsx`, `src/components/layout/workspace-switcher.tsx`,
+  `src/features/recordings/upload.ts`, `src/features/invitations/invitation-page.tsx`,
+  `src/app/invite/[token]/page.tsx`, routes `…/recordings`, `…/comments`,
+  `supabase/migrations/20261025120000_broadcast_reference_data.sql`,
+  `tests/e2e/workflows.spec.ts`, `tests/api/frontend-support.spec.ts`, `tests/unit/mappers.test.ts`,
+  `docs/backend/FRONTEND_INTEGRATION.md`.
+- Modified: store (`app-store`, `reducer`, `use-actions`, `selectors`), types, every feature page
+  and form that mutates data (calls, opportunities, interviews, follow-ups, preparation, questions,
+  recordings, collaboration, settings, overview), layout (header, sidebar, mobile nav, data gate,
+  confirm dialog), login page, calls/notes/recordings/comments services and contracts.
+- Removed: `src/data/mock-data.ts`, `src/features/recordings/{local-file-registry,use-object-url}.ts`.
+
+### Database migrations
+
+| Migration | Applied locally |
+| --- | --- |
+| `20261025120000_broadcast_reference_data` | ✅ |
+
+### Tests executed and results
+
+| Suite | Result |
+| --- | --- |
+| `npm run test:db` (10 files) | ✅ 505/505 |
+| `npm run test` (unit + HTTP integration) | ✅ 93/93 (new: 6 mapper tests) |
+| `npx playwright test` (api + chromium) | ✅ 53/53 (new: 2 API, 3 browser workflows) |
+| `npm run lint`, `npx tsc --noEmit`, `npm run build`, `supabase db lint` | ✅ |
+| Secret scan (client bundle, repo files) | ✅ no key values; the only name match is supabase-js's own `sb_secret_` prefix check |
+
+Browser workflows verified: create opportunity → change stage → log call with new recruiter
+and follow-up → upload a recording (consent, server verification) → play it via a signed URL →
+fake file rejected → everything persists after reload → prep task → dashboard → another account
+gets "not found"; owner invites by link → invitee signs in through the link and accepts →
+read-only viewer interface → owner's new note appears live → promotion to commenter → live
+comment; stale note save shows the conflict prompt.
+
+Defects found and fixed:
+
+1. Sign-out raced a background request's 401 redirect (`/login?next=/` instead of the
+   signed-out page) → 401 redirects are suppressed while signing out.
+2. Checkboxes waited for the server before changing → optimistic toggles with rollback.
+
+### Outstanding issues
+
+- The whole workspace is loaded up front (fine for personal volumes; paginate per route if it grows).
+- Recruiter call edits are last-write-wins (version checks exist for notes only).
+- Realtime is best-effort; no offline queue.
+- Invitation emails (D9), ownership transfer, maintenance-job scheduling (Phase 9) remain open.
+
+### Architectural decisions
+
+- Kept the client store and components; replaced its data source and mutations (minimal UI churn).
+- Realtime notifications trigger API refetches, so the API stays the only read path.
+- Optimistic updates only for instant, easily reverted interactions.
+
+### Next phase
+
+Phase 8 — Testing and QA — awaiting approval.
 

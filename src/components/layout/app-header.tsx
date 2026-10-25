@@ -15,7 +15,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { markSigningOut } from "@/lib/api/client";
 import { initials } from "@/lib/format";
+import { usePermissions } from "@/lib/store/permissions";
 import { GlobalSearch } from "./global-search";
 import { MobileNav } from "./mobile-nav";
 import { signOut } from "@/server/auth/actions";
@@ -25,6 +27,7 @@ import { getPageTitle } from "./nav-config";
 export function AppHeader({ user }: { user: ShellUser }) {
   const pathname = usePathname();
   const [signingOut, startSignOut] = useTransition();
+  const { canEdit } = usePermissions();
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -37,17 +40,21 @@ export function AppHeader({ user }: { user: ShellUser }) {
           <GlobalSearch />
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
-          <Button asChild size="sm" className="hidden sm:inline-flex">
-            <Link href="/calls/new">
-              <Plus />
-              New Recruiter Call
-            </Link>
-          </Button>
-          <Button asChild size="icon" className="sm:hidden" aria-label="New recruiter call">
-            <Link href="/calls/new">
-              <Plus />
-            </Link>
-          </Button>
+          {canEdit && (
+            <>
+              <Button asChild size="sm" className="hidden sm:inline-flex">
+                <Link href="/calls/new">
+                  <Plus />
+                  New Recruiter Call
+                </Link>
+              </Button>
+              <Button asChild size="icon" className="sm:hidden" aria-label="New recruiter call">
+                <Link href="/calls/new">
+                  <Plus />
+                </Link>
+              </Button>
+            </>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -59,7 +66,7 @@ export function AppHeader({ user }: { user: ShellUser }) {
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <p className="px-2 py-3 text-sm text-muted-foreground">
-                Notifications are not available in the prototype yet.
+                Notifications are not available yet. Recent changes appear in the activity feed on the Shared page.
               </p>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -85,6 +92,7 @@ export function AppHeader({ user }: { user: ShellUser }) {
                 disabled={signingOut}
                 onSelect={(event) => {
                   event.preventDefault();
+                  markSigningOut();
                   startSignOut(() => signOut());
                 }}
               >

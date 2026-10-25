@@ -20,6 +20,8 @@ import { INTERVIEW_FORMAT_LABELS, parseList, STAGE_LABELS, toDateTimeLocalValue 
 import { useAppStore } from "@/lib/store/app-store";
 import { findById } from "@/lib/store/selectors";
 import { useActions } from "@/lib/store/use-actions";
+import { FormError } from "@/components/shared/form-error";
+import { useSubmit } from "@/lib/hooks/use-submit";
 import type { ID, Interview, InterviewFormat } from "@/types";
 
 const INTERVIEW_STAGES: Interview["stage"][] = ["recruiter_screen", "technical", "hiring_manager", "offer"];
@@ -36,6 +38,7 @@ export function InterviewFormDialog({
   const { data } = useAppStore();
   const { saveInterview } = useActions();
   const [open, setOpen] = useState(false);
+  const submit = useSubmit();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [values, setValues] = useState(init);
 
@@ -57,7 +60,7 @@ export function InterviewFormDialog({
 
   const set = (key: keyof ReturnType<typeof init>, value: string) => setValues((v) => ({ ...v, [key]: value }));
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const next: Record<string, string> = {};
     if (!values.opportunityId) next.opportunityId = "Choose an opportunity.";
@@ -68,20 +71,20 @@ export function InterviewFormDialog({
     setErrors(next);
     if (Object.keys(next).length) return;
 
-    saveInterview({
-      id: interview?.id,
-      opportunityId: values.opportunityId,
+    const fields = {
       title: values.title.trim(),
       stage: values.stage,
       scheduledAt: new Date(values.scheduledAt).toISOString(),
       durationMinutes: duration,
       format: values.format,
       interviewers: parseList(values.interviewers),
-      status: interview?.status ?? "scheduled",
-      outcome: interview?.outcome ?? "pending",
       notes: values.notes,
-    });
-    setOpen(false);
+    };
+    const saved = await submit.run(
+      () => (interview ? saveInterview(fields, interview.id) : saveInterview({ ...fields, opportunityId: values.opportunityId })),
+      { success: interview ? "Interview saved" : "Interview scheduled" },
+    );
+    if (saved) setOpen(false);
   }
 
   return (
@@ -90,6 +93,7 @@ export function InterviewFormDialog({
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
+          submit.reset();
           setValues(init());
           setErrors({});
         }
@@ -158,12 +162,13 @@ export function InterviewFormDialog({
             <Textarea id="int-notes" value={values.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
         </form>
+        <FormError message={submit.error} />
         <DialogFooter>
           <Button variant="outline" type="button" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button type="submit" form="interview-form">
-            {interview ? "Save changes" : "Schedule"}
+          <Button type="submit" form="interview-form" disabled={submit.pending}>
+            {submit.pending ? "Saving…" : interview ? "Save changes" : "Schedule"}
           </Button>
         </DialogFooter>
       </DialogContent>

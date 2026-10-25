@@ -11,7 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNow } from "@/hooks/use-now";
-import { formatDate, formatRelativeDay, fromDateInputValue, toDateInputValue } from "@/lib/format";
+import { formatDate, formatRelativeDay, toDateInputValue } from "@/lib/format";
+import { useMutation, useSubmit } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useAppStore } from "@/lib/store/app-store";
 import { findById, isOverdue, sortByDateAsc } from "@/lib/store/selectors";
 import { useActions } from "@/lib/store/use-actions";
@@ -33,6 +35,8 @@ export function FollowUpList({
 }) {
   const { data } = useAppStore();
   const { toggleFollowUp, deleteFollowUp } = useActions();
+  const { canEdit } = usePermissions();
+  const mutate = useMutation();
   const now = useNow();
   const sorted = [
     ...sortByDateAsc(tasks.filter((t) => !t.completed), (t) => t.dueDate),
@@ -56,7 +60,8 @@ export function FollowUpList({
                   id={checkboxId}
                   className="mt-0.5"
                   checked={task.completed}
-                  onCheckedChange={() => toggleFollowUp(task.id)}
+                  disabled={!canEdit}
+                  onCheckedChange={() => void mutate(() => toggleFollowUp(task))}
                 />
                 <div className="min-w-0 flex-1">
                   <label
@@ -91,20 +96,22 @@ export function FollowUpList({
                   </Badge>
                 )}
                 {task.completed && <Badge variant="success">Done</Badge>}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Delete follow-up: ${task.title}`}
-                  onClick={() => deleteFollowUp(task.id)}
-                >
-                  <Trash2 />
-                </Button>
+                {canEdit && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Delete follow-up: ${task.title}`}
+                    onClick={() => void mutate(() => deleteFollowUp(task.id), "Follow-up deleted")}
+                  >
+                    <Trash2 />
+                  </Button>
+                )}
               </li>
             );
           })}
         </ul>
       )}
-      <AddFollowUpForm opportunityId={opportunityId} />
+      {canEdit && <AddFollowUpForm opportunityId={opportunityId} />}
     </div>
   );
 }
@@ -116,17 +123,21 @@ function AddFollowUpForm({ opportunityId }: { opportunityId?: ID }) {
   const [title, setTitle] = useState("");
   const [due, setDue] = useState(() => toDateInputValue(now.toISOString()));
   const [oppId, setOppId] = useState<string>(opportunityId ?? data.opportunities[0]?.id ?? "");
-  const [error, setError] = useState("");
+  const [localError, setError] = useState("");
+  const submit = useSubmit();
+  const error = localError || submit.error;
   const formId = opportunityId ?? "global";
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) return setError("Describe the follow-up.");
     if (!due) return setError("Choose a due date.");
     if (!oppId) return setError("Choose an opportunity.");
-    saveFollowUp({ opportunityId: oppId, title: title.trim(), dueDate: fromDateInputValue(due), completed: false });
-    setTitle("");
     setError("");
+    const saved = await submit.run(() => saveFollowUp({ opportunityId: oppId, title: title.trim(), dueDate: due }), {
+      success: "Follow-up added",
+    });
+    if (saved) setTitle("");
   }
 
   return (
@@ -173,8 +184,8 @@ function AddFollowUpForm({ opportunityId }: { opportunityId?: ID }) {
         value={due}
         onChange={(e) => setDue(e.target.value)}
       />
-      <Button type="submit" variant="outline">
-        <Plus /> Add
+      <Button type="submit" variant="outline" disabled={submit.pending}>
+        <Plus /> {submit.pending ? "Adding…" : "Add"}
       </Button>
     </form>
   );

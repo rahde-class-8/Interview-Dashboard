@@ -2,6 +2,8 @@
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STAGE_LABELS } from "@/lib/format";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
 import { OPPORTUNITY_STAGES, type Opportunity } from "@/types";
 
@@ -16,11 +18,14 @@ export function StageSelect({
   className?: string;
 }) {
   const { setOpportunityStage } = useActions();
+  const mutate = useMutation();
+  const { canEdit } = usePermissions();
 
   return (
     <Select
       value={opportunity.stage}
-      onValueChange={(stage) => setOpportunityStage(opportunity.id, stage as Opportunity["stage"])}
+      disabled={!canEdit}
+      onValueChange={(stage) => void mutate(() => setOpportunityStage(opportunity.id, stage as Opportunity["stage"]))}
     >
       <SelectTrigger size={size} className={className} aria-label={`Stage for ${opportunity.title}`}>
         <SelectValue />

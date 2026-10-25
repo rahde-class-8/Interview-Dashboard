@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(55);
+select plan(56);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000010a1', 'collab-owner@example.com'),
@@ -228,6 +228,11 @@ select ok(
     where topic = 'workspace:a1000000-0000-0000-0000-000000000000' and private and event = 'change'
       and payload ->> 'table' = 'opportunities' and payload ->> 'recordId' = '01000000-0000-0000-0000-000000000001') >= 1,
   'changes are broadcast on the private workspace topic');
+select ok(
+  (select count(*) from realtime.messages
+    where topic = 'workspace:a1000000-0000-0000-0000-000000000000'
+      and payload ->> 'table' = 'companies' and payload ->> 'recordId' = 'c1000000-0000-0000-0000-0000000000c0') = 1,
+  'reference data (companies, recruiters, questions, STAR stories) is broadcast too');
 select is(
   (select count(*)::int from realtime.messages
     where topic = 'workspace:a1000000-0000-0000-0000-000000000000'

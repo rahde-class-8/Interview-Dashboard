@@ -171,7 +171,7 @@ Response `Opportunity`: `{ id, workspaceId, title, location, workMode, employmen
 
 | Method | Path | Role | Purpose |
 | --- | --- | --- | --- |
-| GET | `…/calls?q=&stage=&opportunityId=&recruiterId=&from=&to=&limit=&cursor=` | V | Call **summaries**, newest first. `q` matches recruiter name, company name or job title; `stage` filters by the opportunity's stage; `from`/`to` bound `callAt` |
+| GET | `…/calls?q=&stage=&opportunityId=&recruiterId=&from=&to=&view=summary\|detail&limit=&cursor=` | V | Call **summaries** (or full calls with `view=detail`), newest first. `q` matches recruiter name, company name or job title; `stage` filters by the opportunity's stage; `from`/`to` bound `callAt` |
 | POST | `…/calls` | E | Create a call with its opportunity, recruiter and follow-up **in one transaction** |
 | GET | `…/calls/{id}` | V | Full call detail |
 | PATCH | `…/calls/{id}` | E | Partial update; can also edit the linked opportunity/recruiter and follow-up (one transaction) |
@@ -227,6 +227,7 @@ full upload flow, limits, retention and troubleshooting. The API never streams a
 
 | Method | Path | Role | Purpose |
 | --- | --- | --- | --- |
+| GET | `/recordings` | viewer | Every call's recordings in the workspace (same `status` filter as below) |
 | GET | `/calls/{id}/recordings` | viewer | List a call's recordings. Query: `status` = `active` (default: all but deleted) \| `uploaded` \| `pending` \| `failed`, `limit`, `cursor` |
 | POST | `/calls/{id}/recordings` | editor | Start an upload → `201 { recording, upload }` |
 | GET | `/recordings/{id}` | viewer | Recording metadata (deleted → `404`) |
@@ -378,7 +379,7 @@ Preview and accept share a limit of 60 attempts per user per hour. No email is s
 
 | Method | Path | Role | Purpose |
 | --- | --- | --- | --- |
-| GET | `/notes?opportunityId=&limit=&cursor=` | V | Summaries (no `body`), most recently updated first |
+| GET | `/notes?opportunityId=&view=summary\|detail&limit=&cursor=` | V | Most recently updated first; summaries omit `body` unless `view=detail` |
 | POST | `/notes` | E | `{ title (1–200), body? (≤ 100,000), opportunityId? }` |
 | GET | `/notes/{id}` | V | `SharedNote`: `{ id, workspaceId, opportunityId, title, body, version, createdBy, updatedBy: { id, displayName } \| null, createdAt, updatedAt }` |
 | PATCH | `/notes/{id}` | E | `{ version, title?, body?, opportunityId? }`. Stale `version` → `409 { error, current }` |
@@ -388,6 +389,7 @@ Preview and accept share a limit of 60 attempts per user per hour. No email is s
 
 | Method | Path | Role | Purpose |
 | --- | --- | --- | --- |
+| GET | `/comments?noteId=` | V | All comment threads in the workspace, oldest first |
 | GET | `/notes/{id}/comments` | V | Oldest first. `Comment`: `{ id, workspaceId, noteId, author, body \| null, deleted, editedAt, createdAt }` |
 | POST | `/notes/{id}/comments` | C | `{ body (1–5000) }` |
 | PATCH | `/comments/{id}` | C, author only | `{ body }`. Deleted → `409` |

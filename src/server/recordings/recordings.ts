@@ -18,7 +18,7 @@ import {
   type RecordingUploadTarget,
 } from "@/shared/contracts/recordings";
 import { check, checkMaybe, checkOk, json, noContent, parseId, readBody, readQuery, requireWorkspace, type ApiContext } from "../core/api";
-import type { ItemParams } from "../core/crud";
+import type { ItemParams, WorkspaceParams } from "../core/crud";
 import { ApiError, forbidden, fromDatabaseError, notFound } from "../core/errors";
 import { decodeCursor, pageRange, toPage } from "../core/pagination";
 import { enforceRateLimit } from "../core/rate-limit";
@@ -142,6 +142,17 @@ export const recordings = {
     const params = readQuery(request, recordingListQuerySchema);
     const offset = decodeCursor(params.cursor);
     let query = ctx.supabase.from("recordings").select("*").eq("workspace_id", ctx.params.workspaceId).eq("recruiter_call_id", callId);
+    query = params.status === "active" ? query.neq("status", "deleted") : query.eq("status", params.status);
+    const rows = check(await query.order("created_at", { ascending: false }).order("id").range(...pageRange(params.limit, offset)), RESOURCE);
+    return json<Page<Recording>>(toPage(rows, params.limit, offset, toRecording));
+  },
+
+  /** GET /recordings — any member; every call's recordings (default: all but deleted). */
+  async listForWorkspace(request: NextRequest, ctx: ApiContext<WorkspaceParams>) {
+    await requireWorkspace(ctx, ctx.params.workspaceId, "viewer");
+    const params = readQuery(request, recordingListQuerySchema);
+    const offset = decodeCursor(params.cursor);
+    let query = ctx.supabase.from("recordings").select("*").eq("workspace_id", ctx.params.workspaceId);
     query = params.status === "active" ? query.neq("status", "deleted") : query.eq("status", params.status);
     const rows = check(await query.order("created_at", { ascending: false }).order("id").range(...pageRange(params.limit, offset)), RESOURCE);
     return json<Page<Recording>>(toPage(rows, params.limit, offset, toRecording));

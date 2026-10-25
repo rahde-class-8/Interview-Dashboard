@@ -1,5 +1,11 @@
 # Frontend Progress
 
+> **Historical record of the frontend prototype phases.** Since backend Phase 7
+> (2026-10-25) the UI uses the real API: mock data, the in-memory recording registry
+> and local-only collaboration described below were removed. Current state:
+> [BACKEND_PROGRESS.md](BACKEND_PROGRESS.md) and
+> [docs/backend/FRONTEND_INTEGRATION.md](docs/backend/FRONTEND_INTEGRATION.md).
+
 ## Phase 1 — Project Setup and Layout ✅
 
 - Next.js 15 (App Router) + TypeScript + Tailwind CSS v4 + ESLint scaffolded.

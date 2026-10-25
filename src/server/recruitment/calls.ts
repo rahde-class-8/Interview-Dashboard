@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { NextRequest } from "next/server";
+import type { z } from "zod";
 
 import { callCreateSchema, callListQuerySchema, callUpdateSchema, type Call, type CallSummary } from "@/shared/contracts/calls";
 import { check, json, parseId, readBody, requireWorkspace, type ApiContext } from "../core/api";
@@ -104,11 +105,9 @@ const detail = crud({
   toUpdate: () => ({}),
 });
 
-const summaries = crud({
+const listConfig = {
   table: "recruiter_calls",
   resource: "Recruiter call",
-  select: SUMMARY_SELECT,
-  toDto: (row: CallRow) => toCallSummary(row),
   listQuery: callListQuerySchema,
   resolveList: async (params, ctx) => {
     const ws = ctx.params.workspaceId;
@@ -153,7 +152,11 @@ const summaries = crud({
   toInsert: () => ({}),
   updateSchema: callUpdateSchema,
   toUpdate: () => ({}),
-});
+} satisfies Omit<Parameters<typeof crud<CallRow, CallSummary, z.infer<typeof callListQuerySchema>, unknown, unknown>>[0], "select" | "toDto">;
+
+const summaries = crud({ ...listConfig, select: SUMMARY_SELECT, toDto: (row: CallRow) => toCallSummary(row) });
+/** Same filters, full call records (`?view=detail`), e.g. for loading a workspace into the client. */
+const detailList = crud({ ...listConfig, select: DETAIL_SELECT, toDto: (row: CallRow) => toCall(row) });
 
 function toPayload(input: Record<string, unknown> & {
   opportunity?: { create: Record<string, unknown> } | { id: string; update?: Record<string, unknown> };
@@ -189,7 +192,9 @@ async function save(ctx: ApiContext<WorkspaceParams>, callId: string | null, pay
 }
 
 export const calls = {
-  list: summaries.list,
+  list(request: NextRequest, ctx: ApiContext<WorkspaceParams>) {
+    return request.nextUrl.searchParams.get("view") === "detail" ? detailList.list(request, ctx) : summaries.list(request, ctx);
+  },
   get: detail.get,
   remove: detail.remove,
 

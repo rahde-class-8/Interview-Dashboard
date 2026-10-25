@@ -20,6 +20,8 @@ import { EMPLOYMENT_TYPE_LABELS, parseList, STAGE_LABELS, WORK_MODE_LABELS } fro
 import { useAppStore } from "@/lib/store/app-store";
 import { findById } from "@/lib/store/selectors";
 import { useActions } from "@/lib/store/use-actions";
+import { FormError } from "@/components/shared/form-error";
+import { useSubmit } from "@/lib/hooks/use-submit";
 import {
   OPPORTUNITY_STAGES,
   type EmploymentType,
@@ -30,6 +32,7 @@ import {
 } from "@/types";
 
 const NEW_RECRUITER = "__new";
+const NO_RECRUITER = "__none";
 
 interface FormValues {
   companyName: string;
@@ -66,6 +69,7 @@ export function OpportunityFormDialog({
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<FormValues>(() => initialValues());
   const [errors, setErrors] = useState<Errors>({});
+  const submit = useSubmit();
 
   function initialValues(): FormValues {
     const company = findById(data.companies, opportunity?.companyId);
@@ -79,7 +83,7 @@ export function OpportunityFormDialog({
       compMax: opportunity?.compensation ? String(opportunity.compensation.max) : "",
       compPeriod: opportunity?.compensation?.period ?? "year",
       stage: opportunity?.stage ?? "new",
-      recruiterId: opportunity?.recruiterId ?? (data.recruiters[0]?.id ?? NEW_RECRUITER),
+      recruiterId: opportunity ? (opportunity.recruiterId ?? NO_RECRUITER) : NO_RECRUITER,
       recruiterName: "",
       recruiterEmail: "",
       recruiterPhone: "",
@@ -109,40 +113,52 @@ export function OpportunityFormDialog({
     return e;
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length) return;
 
-    let recruiterId = values.recruiterId;
-    if (recruiterId === NEW_RECRUITER) {
-      recruiterId = actions.saveRecruiter(
-        { name: values.recruiterName.trim(), email: values.recruiterEmail.trim(), phone: values.recruiterPhone.trim() },
-        actions.ensureCompany(values.companyName),
-      );
-    }
+    const recruiter =
+      values.recruiterId === NO_RECRUITER
+        ? null
+        : values.recruiterId === NEW_RECRUITER
+          ? {
+              create: {
+                name: values.recruiterName.trim(),
+                email: values.recruiterEmail.trim(),
+                phone: values.recruiterPhone.trim() || null,
+              },
+            }
+          : { id: values.recruiterId };
+    const companyName = values.companyName.trim();
+    const existingCompany = data.companies.find((c) => c.name.toLowerCase() === companyName.toLowerCase());
 
-    const id = actions.saveOpportunity(
-      {
-        companyName: values.companyName,
-        recruiterId,
-        title: values.title.trim(),
-        location: values.location.trim(),
-        workMode: values.workMode,
-        employmentType: values.employmentType,
-        compensation: values.compMin
-          ? { min: Number(values.compMin), max: Number(values.compMax), currency: "USD", period: values.compPeriod }
-          : undefined,
-        stage: values.stage,
-        jobDescription: values.jobDescription.trim(),
-        requiredSkills: parseList(values.requiredSkills),
-        preferredSkills: parseList(values.preferredSkills),
-      },
-      opportunity?.id,
+    const saved = await submit.run(
+      () =>
+        actions.saveOpportunity(
+          {
+            company: existingCompany ? { id: existingCompany.id } : { name: companyName },
+            recruiter,
+            title: values.title.trim(),
+            location: values.location.trim(),
+            workMode: values.workMode,
+            employmentType: values.employmentType,
+            compensation: values.compMin
+              ? { min: Number(values.compMin), max: Number(values.compMax), currency: "USD", period: values.compPeriod }
+              : null,
+            stage: values.stage,
+            jobDescription: values.jobDescription.trim(),
+            requiredSkills: parseList(values.requiredSkills),
+            preferredSkills: parseList(values.preferredSkills),
+          },
+          opportunity?.id,
+        ),
+      { success: opportunity ? "Opportunity saved" : "Opportunity created" },
     );
+    if (!saved) return;
     setOpen(false);
-    onSaved?.(id);
+    onSaved?.(saved.id);
   }
 
   return (
@@ -153,6 +169,7 @@ export function OpportunityFormDialog({
         if (next) {
           setValues(initialValues());
           setErrors({});
+          submit.reset();
         }
       }}
     >
@@ -250,6 +267,7 @@ export function OpportunityFormDialog({
                     {r.agency ? ` (${r.agency})` : ""}
                   </SelectItem>
                 ))}
+                <SelectItem value={NO_RECRUITER}>No recruiter</SelectItem>
                 <SelectItem value={NEW_RECRUITER}>+ New recruiter…</SelectItem>
               </SelectContent>
             </Select>
@@ -276,13 +294,16 @@ export function OpportunityFormDialog({
           <Field id="opp-preferred" label="Preferred skills" hint="Comma-separated">
             <Input id="opp-preferred" value={values.preferredSkills} onChange={(e) => set("preferredSkills", e.target.value)} />
           </Field>
+          <div className="sm:col-span-2">
+            <FormError message={submit.error} />
+          </div>
         </form>
         <DialogFooter>
           <Button variant="outline" type="button" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button type="submit" form="opportunity-form">
-            {opportunity ? "Save changes" : "Create opportunity"}
+          <Button type="submit" form="opportunity-form" disabled={submit.pending}>
+            {submit.pending ? "Saving…" : opportunity ? "Save changes" : "Create opportunity"}
           </Button>
         </DialogFooter>
       </DialogContent>

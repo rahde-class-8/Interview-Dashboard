@@ -26,6 +26,8 @@ import {
   getUpcomingInterviews,
   isActiveOpportunity,
 } from "@/lib/store/selectors";
+import { useMutation } from "@/lib/hooks/use-submit";
+import { usePermissions } from "@/lib/store/permissions";
 import { useActions } from "@/lib/store/use-actions";
 import type { Opportunity, StarStory } from "@/types";
 import { PrepTaskList } from "./prep-task-list";
@@ -220,7 +222,16 @@ function Workspace({ opportunity }: { opportunity: Opportunity }) {
 
 function InterviewNotes({ opportunity }: { opportunity: Opportunity }) {
   const { updateOpportunity } = useActions();
+  const { canEdit } = usePermissions();
+  const mutate = useMutation();
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(opportunity.prepNotes);
+  // Follow changes saved elsewhere unless the user has unsaved edits.
+  const [base, setBase] = useState(opportunity.prepNotes);
+  if (base !== opportunity.prepNotes) {
+    setBase(opportunity.prepNotes);
+    if (draft === base) setDraft(opportunity.prepNotes);
+  }
   const dirty = draft !== opportunity.prepNotes;
 
   return (
@@ -233,18 +244,27 @@ function InterviewNotes({ opportunity }: { opportunity: Opportunity }) {
         <label htmlFor="prep-notes" className="sr-only">
           Interview notes
         </label>
-        <Textarea id="prep-notes" rows={10} value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <div className="flex items-center justify-end gap-3">
-          <span className="text-xs text-muted-foreground" aria-live="polite">
-            {dirty ? "Unsaved changes" : "Saved in this session"}
-          </span>
-          <Button variant="outline" disabled={!dirty} onClick={() => setDraft(opportunity.prepNotes)}>
-            Discard
-          </Button>
-          <Button disabled={!dirty} onClick={() => updateOpportunity(opportunity.id, { prepNotes: draft })}>
-            Save notes
-          </Button>
-        </div>
+        <Textarea id="prep-notes" rows={10} value={draft} readOnly={!canEdit} onChange={(e) => setDraft(e.target.value)} />
+        {canEdit && (
+          <div className="flex items-center justify-end gap-3">
+            <span className="text-xs text-muted-foreground" aria-live="polite">
+              {saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}
+            </span>
+            <Button variant="outline" disabled={!dirty || saving} onClick={() => setDraft(opportunity.prepNotes)}>
+              Discard
+            </Button>
+            <Button
+              disabled={!dirty || saving}
+              onClick={async () => {
+                setSaving(true);
+                await mutate(() => updateOpportunity(opportunity.id, { prepNotes: draft }), "Notes saved");
+                setSaving(false);
+              }}
+            >
+              Save notes
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -253,21 +273,24 @@ function InterviewNotes({ opportunity }: { opportunity: Opportunity }) {
 function StarStories() {
   const { data } = useAppStore();
   const { deleteStarStory } = useActions();
+  const { canEdit } = usePermissions();
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>STAR stories</CardTitle>
         <CardDescription>Reusable across every opportunity</CardDescription>
-        <CardAction>
-          <StarStoryDialog
-            trigger={
-              <Button size="sm" variant="outline">
-                <Plus /> New story
-              </Button>
-            }
-          />
-        </CardAction>
+        {canEdit && (
+          <CardAction>
+            <StarStoryDialog
+              trigger={
+                <Button size="sm" variant="outline">
+                  <Plus /> New story
+                </Button>
+              }
+            />
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent>
         {data.starStories.length === 0 ? (
@@ -275,7 +298,7 @@ function StarStories() {
         ) : (
           <ul className="space-y-3">
             {data.starStories.map((story) => (
-              <StarStoryCard key={story.id} story={story} onDelete={() => deleteStarStory(story.id)} />
+              <StarStoryCard key={story.id} story={story} canEdit={canEdit} onDelete={() => deleteStarStory(story.id)} />
             ))}
           </ul>
         )}
@@ -284,7 +307,7 @@ function StarStories() {
   );
 }
 
-function StarStoryCard({ story, onDelete }: { story: StarStory; onDelete: () => void }) {
+function StarStoryCard({ story, canEdit, onDelete }: { story: StarStory; canEdit: boolean; onDelete: () => Promise<void> }) {
   return (
     <li className="rounded-lg border">
       <details className="group">
@@ -309,6 +332,7 @@ function StarStoryCard({ story, onDelete }: { story: StarStory; onDelete: () => 
               </div>
             ))}
           </dl>
+          {canEdit && (
           <div className="flex gap-2">
             <StarStoryDialog
               story={story}
@@ -320,7 +344,7 @@ function StarStoryCard({ story, onDelete }: { story: StarStory; onDelete: () => 
             />
             <ConfirmDeleteDialog
               title="Delete STAR story?"
-              description={`“${story.title}” will be removed from this prototype session.`}
+              description={`“${story.title}” will be permanently deleted for everyone in this workspace.`}
               onConfirm={onDelete}
               trigger={
                 <Button size="sm" variant="ghost" className="text-destructive">
@@ -329,6 +353,7 @@ function StarStoryCard({ story, onDelete }: { story: StarStory; onDelete: () => 
               }
             />
           </div>
+          )}
         </div>
       </details>
     </li>

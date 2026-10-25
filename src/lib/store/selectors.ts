@@ -111,12 +111,12 @@ export function getCallRows(data: AppData): CallRow[] {
     const company = findById(data.companies, opportunity?.companyId);
     return {
       call,
-      recruiterName: findById(data.recruiters, call.recruiterId)?.name ?? "Unknown recruiter",
+      recruiterName: findById(data.recruiters, call.recruiterId)?.name ?? "No recruiter",
       companyName: company?.name ?? "Unknown company",
       jobTitle: opportunity?.title ?? "Unknown role",
       opportunity,
       followUp: getCallFollowUp(data, call.id),
-      recordingCount: getCallRecordings(data, call.id).length,
+      recordingCount: getCallRecordings(data, call.id).filter((r) => r.status === "uploaded").length,
     };
   });
 }
