@@ -130,7 +130,19 @@ All are `SECURITY INVOKER` (RLS and grants apply), run in one transaction, and u
 Covered by `008_services.test.sql` (atomic rollback, find-or-create, partial updates,
 cross-workspace references, permissions).
 
-### 4.5 Recording storage functions (Phase 5, service role only)
+### 4.5 Collaboration triggers (Phase 6)
+
+| Trigger function | Tables | Behavior |
+| --- | --- | --- |
+| `app.activity_*` → `app.log_activity` | opportunities, recruiter_calls, interviews, preparation_tasks, follow_up_tasks, recordings, shared_notes, comments, workspace_members, workspace_invitations, workspaces | append important changes to `activity_events` (labels only; skipped while a workspace is being deleted). See COLLABORATION.md §7 |
+| `app.broadcast_change()` | D7 tables + shared_notes, recordings, workspace_members, workspaces | `realtime.send` an id-only `change` message to the private topic `workspace:<id>` |
+| `app.prepare_invitation()` | workspace_invitations (insert) | expires stale pending invitations; rejects members, duplicates and > 50 pending |
+| `app.stamp_note_author()` | shared_notes | sets `created_by` / `updated_by` from the acting user |
+| `app.guard_comment_update()` (replaced) | comments | soft delete clears the text; deleted comments immutable; author-only edits; sets `edited_at` |
+
+`comments_body_check` now allows an empty body only for deleted comments.
+
+### 4.6 Recording storage functions (Phase 5, service role only)
 
 | Function | Purpose |
 | --- | --- |
@@ -171,6 +183,7 @@ still rejected.
   [`AUTHENTICATION.md`](./AUTHENTICATION.md) §6.2. `storage_cleanup_queue` and `rate_limit_counters` grant nothing to client roles.
 - Executable by `authenticated`: `app.valid_candidate_questions` (check constraint),
   `app.has_workspace_role` / `app.shares_workspace_with` (policies), `public.accept_invitation`,
+  `public.preview_invitation` (Phase 6), `app.current_actor` / `app.workspace_topic_id` (Phase 6, not definer),
   and the Phase 4 write functions. No other `SECURITY DEFINER` function is callable by clients
   (asserted by `001_schema.test.sql`).
 
@@ -188,6 +201,7 @@ still rejected.
 | `20261024190000_application_services.sql` | `save_opportunity`, `save_recruiter_call` and helpers (Phase 4) |
 | `20261024191000_workspace_insert_id.sql` | allow the API to supply a new workspace's id (Phase 4) |
 | `20261024200000_recording_storage.sql` | private `recordings` bucket, status guard, quota/limits, retention, rate limits, maintenance functions (Phase 5) |
+| `20261025100000_collaboration_services.sql` | activity triggers, Realtime broadcast triggers + `realtime.messages` policy, invitation checks and `preview_invitation`, comment soft delete, note authorship, case-insensitive `accept_invitation` fix (Phase 6) |
 
 ### 7.1 Commands
 

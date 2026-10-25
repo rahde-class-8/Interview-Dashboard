@@ -195,7 +195,7 @@ insert into workspace_invitations (workspace_id, email, role, token_hash, invite
    extensions.digest('other-email-0123456789abcdef0123456789abcd', 'sha256'), '00000000-0000-0000-0000-00000000000a', 'pending', now() + interval '1 day'),
   ('a7000000-0000-0000-0000-000000000000', 'revoke-me@example.com', 'viewer',
    extensions.digest('revoked-0123456789abcdef0123456789abcdef01', 'sha256'), '00000000-0000-0000-0000-00000000000a', 'pending', now() + interval '1 day'),
-  ('a7000000-0000-0000-0000-000000000000', 'invitee@example.com', 'editor',
+  ('a7000000-0000-0000-0000-000000000000', 'expired-invitee@example.com', 'editor',
    extensions.digest('expired-0123456789abcdef0123456789abcdef01', 'sha256'), '00000000-0000-0000-0000-00000000000a', 'pending', now() - interval '1 minute');
 
 select is(pg_temp.run_as('00000000-0000-0000-0000-0000000000f1',
@@ -305,7 +305,7 @@ select is(pg_temp.value_as('00000000-0000-0000-0000-00000000000e',
 insert into activity_events (workspace_id, actor_id, action, entity_type) values
   ('a7000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-00000000000a', 'note.created', 'note');
 select is(pg_temp.value_as('00000000-0000-0000-0000-00000000000d',
-  $$select count(*) from activity_events$$), '1',
+  $$select count(*) from activity_events where action = 'note.created' and entity_type = 'note'$$), '1',
   'members can read the activity log');
 select is(pg_temp.run_as('00000000-0000-0000-0000-00000000000a',
   $$insert into activity_events (workspace_id, action, entity_type) values ('a7000000-0000-0000-0000-000000000000', 'note.deleted', 'note')$$), 'denied',

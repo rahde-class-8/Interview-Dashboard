@@ -77,7 +77,7 @@ select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
     where p.pronamespace in ('app'::regnamespace, 'public'::regnamespace) and p.prosecdef
       and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['accept_invitation', 'has_workspace_role', 'shares_workspace_with'],
+  array['accept_invitation', 'has_workspace_role', 'preview_invitation', 'shares_workspace_with'],
   'authenticated can call only the allow-listed SECURITY DEFINER functions'
 );
 

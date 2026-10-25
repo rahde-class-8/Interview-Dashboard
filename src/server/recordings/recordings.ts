@@ -303,7 +303,7 @@ export const recordings = {
     if (role !== "owner" && row.uploaded_by !== ctx.userId) {
       throw forbidden("Only the workspace owner or the person who uploaded it can delete this recording.");
     }
-    check(await getSupabaseAdmin().rpc("soft_delete_recording", { p_id: row.id }), RESOURCE);
+    check(await getSupabaseAdmin().rpc("soft_delete_recording", { p_id: row.id, p_actor: ctx.userId }), RESOURCE);
     await purgeNow(row.storage_path);
     return noContent();
   },

@@ -247,14 +247,14 @@ isOneToOne: false
                   ]
                 },"rate_limit_counters": {
                   Row: {
-                    "action": string,"hits": number,"subject": string,"window_start": string
+                    "action": string,"hits": number,"id": string,"subject": string,"window_start": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "action": string,"hits"?: number,"subject": string,"window_start": string
+                    "action": string,"hits"?: number,"id"?: string,"subject": string,"window_start": string
                   }
                   Update: {
-                    "action"?: string,"hits"?: number,"subject"?: string,"window_start"?: string
+                    "action"?: string,"hits"?: number,"id"?: string,"subject"?: string,"window_start"?: string
                   }
                   Relationships: [
                     
@@ -590,6 +590,11 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"preview_invitation":
+{ Args: { "p_token": string }; Returns: {
+              "email_matches": boolean,"expires_at": string,"invited_by_name": string,"role": string,"workspace_name": string
+            }[]
+                           },
 "run_recording_maintenance":
 { Args: { "p_abandon_after"?: string,"p_tombstone_after"?: string }; Returns: Json
                            },
@@ -600,7 +605,7 @@ isOneToOne: false
 { Args: { "p_call_id": string,"p_payload": Json,"p_workspace_id": string }; Returns: Json
                            },
 "soft_delete_recording":
-{ Args: { "p_id": string }; Returns: {
+{ Args: { "p_actor"?: string,"p_id": string }; Returns: {
               "consent_confirmed_at": string,
 "created_at": string,
 "delete_after": string | null,

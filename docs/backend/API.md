@@ -49,7 +49,7 @@ rows created while you page can shift results by one.
 | 401 | `unauthenticated` | No valid session |
 | 403 | `forbidden` | Member without the required role, or a cross-origin mutation |
 | 404 | `not_found` | Unknown id, or a workspace the caller is not a member of (no existence leak) |
-| 409 | `conflict` | Unique constraint (e.g. company name already exists) |
+| 409 | `conflict` | Unique constraint (e.g. company name already exists), a state conflict (e.g. inviting an existing member), or a stale note `version` (body also contains `current`) |
 | 409 | `in_use` | Delete blocked because other records reference the row |
 | 409 | `quota_exceeded` | Workspace storage quota or the per-call recording limit reached |
 | 409 | `upload_incomplete` | Recording `complete` called before the file reached Storage |
@@ -347,3 +347,60 @@ await fetch(`/api/v1/workspaces/${ws}/calls/${call.id}`, {
   body: JSON.stringify({ notes: "Follow up next week", followUp: { title: "Email Dana", dueDate: "2026-10-28" } }),
 });
 ```
+
+## 13. Collaboration
+
+See [COLLABORATION.md](COLLABORATION.md) for the rules behind these endpoints. Paths below
+are relative to `/api/v1/workspaces/{workspaceId}` unless they start with `/api/v1`.
+Roles: O owner, E editor, C commenter, V viewer (minimum role).
+
+### 13.1 Members
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| GET | `/members` | V | `{ data: Member[] }` (owner first): `{ userId, displayName, email, role, joinedAt, isYou }` |
+| PATCH | `/members/{userId}` | O | `{ role: editor\|commenter\|viewer }`. The owner's role → `409` |
+| DELETE | `/members/{userId}` | O, or self | Remove a member, or leave. The owner → `409` |
+
+### 13.2 Invitations
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| GET | `/invitations?status=pending\|all` | O | `Invitation`: `{ id, workspaceId, email, role, status: pending\|accepted\|revoked\|expired, invitedBy, expiresAt, acceptedAt, createdAt }` |
+| POST | `/invitations` | O | `{ email, role }` → `201 { invitation, inviteUrl, token }` (token shown once). `409` if already a member, already invited, or 50 pending. 20/hour |
+| DELETE | `/invitations/{id}` | O | Revoke a pending invitation → `204` (`409` if not pending) |
+| POST | `/api/v1/invitations/preview` | signed in | `{ token }` → `{ workspaceName, role, invitedByName, expiresAt, emailMatches }`; invalid/used/revoked/expired → `404` |
+| POST | `/api/v1/invitations/accept` | signed in | `{ token }` → `{ workspaceId, role }`; other email → `403`; invalid → `404` |
+
+Preview and accept share a limit of 60 attempts per user per hour. No email is sent yet (D9).
+
+### 13.3 Shared notes
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| GET | `/notes?opportunityId=&limit=&cursor=` | V | Summaries (no `body`), most recently updated first |
+| POST | `/notes` | E | `{ title (1–200), body? (≤ 100,000), opportunityId? }` |
+| GET | `/notes/{id}` | V | `SharedNote`: `{ id, workspaceId, opportunityId, title, body, version, createdBy, updatedBy: { id, displayName } \| null, createdAt, updatedAt }` |
+| PATCH | `/notes/{id}` | E | `{ version, title?, body?, opportunityId? }`. Stale `version` → `409 { error, current }` |
+| DELETE | `/notes/{id}` | E | Deletes the note and its comments |
+
+### 13.4 Comments
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| GET | `/notes/{id}/comments` | V | Oldest first. `Comment`: `{ id, workspaceId, noteId, author, body \| null, deleted, editedAt, createdAt }` |
+| POST | `/notes/{id}/comments` | C | `{ body (1–5000) }` |
+| PATCH | `/comments/{id}` | C, author only | `{ body }`. Deleted → `409` |
+| DELETE | `/comments/{id}` | C (author) or O | Soft delete; the text is erased |
+
+### 13.5 Activity
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| GET | `/activity?entityType=&entityId=&limit=&cursor=` | V | Newest first. `ActivityEvent`: `{ id, workspaceId, actor, action, entityType, entityId, metadata, summary, createdAt }` |
+
+### 13.6 Realtime
+
+| Method | Path | Role | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/v1/realtime/token` | signed in | `{ accessToken, expiresAt }` for `supabase.realtime.setAuth()`; join private channel `workspace:{id}` (members only), event `change`, payload `{ table, op, recordId, workspaceId }` |

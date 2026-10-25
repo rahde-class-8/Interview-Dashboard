@@ -82,7 +82,7 @@ flowchart LR
     AUTH["Supabase Auth"]
     PG[("PostgreSQL<br/>RLS · functions · triggers")]
     ST[("Storage<br/>private bucket: recordings")]
-    RT["Realtime<br/>(postgres_changes, RLS-checked)"]
+    RT["Realtime<br/>(private Broadcast, member-only)"]
     CRON["Supabase Cron<br/>pg_cron + pg_net"]
   end
   UI -->|"fetch (cookie session)"| RH
@@ -149,7 +149,7 @@ Rules: Route Handlers contain no business logic; modules expose services, not ta
 | Transactions | `SECURITY INVOKER` Postgres functions for composite writes | Atomic under RLS; supabase-js has no client transactions |
 | Auth | Supabase Auth, email + password, email confirmation, password reset; `@supabase/ssr` cookie sessions | Required features; managed service |
 | Storage | Private bucket, server-issued signed upload URLs, 5-minute signed playback URLs | Recordings never public; server controls paths and validation |
-| Realtime | `postgres_changes` on a short list of tables, RLS-checked per subscriber | Record-level sync only; no co-editing engine (deferred) |
+| Realtime | Database-triggered Broadcast on private per-workspace channels, id-only payloads (Phase 6; originally planned as `postgres_changes`) | Record-level sync only; no co-editing engine (deferred) |
 | Validation | zod schemas shared by client and server | One source of truth for contracts |
 | Enumerations | `text` + `CHECK` | Easier to evolve than Postgres enums |
 | Client state | Keep the existing Context/`useReducer` store | Spec says preserve frontend; no new state library |
@@ -317,7 +317,7 @@ sequenceDiagram
 ## 8. Collaboration and realtime
 
 - Invitations → acceptance → membership with a role; owners change roles or remove members; comments on shared notes; `activity_events` records important changes (no sensitive content in metadata).
-- Realtime: `postgres_changes` for `opportunities`, `recruiter_calls`, `interviews`, `preparation_tasks`, `follow_up_tasks`, `comments`, `activity_events`. Supabase checks RLS per subscriber for inserts/updates; **delete events are not RLS-filtered** and carry only primary keys (default replica identity), so they reveal IDs only — acceptable and documented.
+- *(Superseded in Phase 6 — see the note at the end and COLLABORATION.md §6; Broadcast removes the delete-event id leak described here.)* Realtime: `postgres_changes` for `opportunities`, `recruiter_calls`, `interviews`, `preparation_tasks`, `follow_up_tasks`, `comments`, `activity_events`. Supabase checks RLS per subscriber for inserts/updates; **delete events are not RLS-filtered** and carry only primary keys (default replica identity), so they reveal IDs only — acceptable and documented.
 - **Not implemented:** simultaneous text editing. Concurrent note edits use optimistic concurrency (`version` column → `409` on conflict). Co-editing is deferred.
 
 ---
@@ -398,3 +398,13 @@ Details → `docs/backend/SECURITY.md`.
 | Free-tier limits | 50 MB upload cap and project pausing → paid plan likely for production (requires your approval) |
 | Recording consent laws | Upload requires consent confirmation; legal review recommended |
 | Differences from earlier drafts | Table names, auth method and API style changed to match this spec (§1.4) |
+
+---
+
+> **Phase 6 implementation note:** collaboration Realtime uses database-triggered Broadcast on
+> private `workspace:<id>` channels with id-only payloads (members authorized by an RLS policy
+> on `realtime.messages`) instead of `postgres_changes`; D7's table list is extended with
+> `shared_notes`, `recordings`, `workspace_members` and `workspaces`. Activity events are
+> written by triggers. Invitations are shared as links until an email provider is chosen (D9).
+> Details: [COLLABORATION.md](COLLABORATION.md).
+

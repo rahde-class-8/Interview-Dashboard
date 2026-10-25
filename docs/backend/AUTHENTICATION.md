@@ -196,7 +196,21 @@ bypasses RLS**. The migration revokes everything and grants explicitly:
    `accepted` — so a token works once.
 
 Errors: `P0002` invalid/used/revoked/expired (one message, no detail), `42501` email
-mismatch, `28000` not signed in. Token generation and emailing are added in Phase 6.
+mismatch, `28000` not signed in.
+
+Phase 6 changes: step 3 previously compared `citext` values inside a function with
+`search_path = ''`, where the case-insensitive operator is not resolved, so the comparison
+was case-sensitive. It now compares lower-cased text explicitly (tested with a
+mixed-case invitation). Token generation is in the API (256-bit, hash-only storage); the
+companion `public.preview_invitation(p_token)` (`SECURITY DEFINER`, `authenticated` only)
+returns only workspace name, role, inviter name, expiry and whether the email matches.
+Emailing is pending decision D9. See [COLLABORATION.md](COLLABORATION.md).
+
+### 6.5 Realtime authorization (Phase 6)
+
+Policy `workspace_members_receive_broadcasts` on `realtime.messages` lets members (any role)
+receive broadcasts on `workspace:<id>`; there is no INSERT policy, so clients cannot send.
+Payloads contain ids only. Details in COLLABORATION.md §6.
 
 ## 7. Tests
 

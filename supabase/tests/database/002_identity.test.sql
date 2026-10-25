@@ -114,8 +114,8 @@ values ('aaaaaaaa-0000-0000-0000-000000000001', 'Dana@Example.com', 'commenter',
 select throws_ok(
   $$insert into workspace_invitations (workspace_id, email, role, token_hash)
     values ('aaaaaaaa-0000-0000-0000-000000000001', 'dana@example.com', 'viewer', extensions.digest('token-2', 'sha256'))$$,
-  '23505', null,
-  'only one pending invitation per email per workspace (case-insensitive)'
+  'P0001', 'This person already has a pending invitation.',
+  'only one pending invitation per email per workspace (case-insensitive; the unique index is the backstop)'
 );
 select throws_ok(
   $$insert into workspace_invitations (workspace_id, email, role, token_hash)

@@ -11,7 +11,7 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 | 3 — Authentication and authorization | **Complete** | RLS and permission tests pass |
 | 4 — Application services | **Complete** | Core CRUD operations work |
 | 5 — Recording storage | **Complete** | Authorized uploads and playback work ✅ |
-| 6 — Collaboration | Not Started | Role-based sharing is enforced |
+| 6 — Collaboration | **Complete** | Role-based sharing is enforced ✅ |
 | 7 — Frontend integration | Not Started | Frontend workflows persist real data |
 | 8 — Testing and QA | Not Started | Critical security tests pass |
 | 9 — Deployment and operations | Not Started | Security, recovery and deployment checks pass |
@@ -539,5 +539,95 @@ Defects found by the tests and fixed:
 
 ### Next phase
 
-Phase 6 — Collaboration (shared notes, comments, activity events, Realtime) — awaiting approval.
+Phase 6 — Collaboration — complete (see below).
+
+---
+
+## Phase 6 — Collaboration Backend
+
+**Status:** Complete (2026-10-25). Gate "role-based sharing is enforced": ✅
+(pgTAP 504/504, Vitest 87/87, Playwright 48/48 — 44 API + 4 browser).
+
+### Completed tasks
+
+- **Invite collaborators**: owner-only `POST …/invitations` with a 256-bit token (only its
+  SHA-256 is stored), returned once as an invite link; duplicate/member/limit checks in a DB
+  trigger; 7-day expiry; revocation; rate limits. **Email delivery not implemented** (D9 open):
+  links are shared manually.
+- **Accept invitations**: `POST /api/v1/invitations/preview` (workspace, role, inviter, email
+  match — nothing else) and `/accept` (single use, bound to the invited email).
+- **Assign roles / update permissions / remove collaborators**: members list, owner-only role
+  changes (editor/commenter/viewer), removal, self-leave; owner protected. Changes take effect
+  on the next request (tested).
+- **Comments** on shared notes: commenter+ add, author edits, author or owner deletes (soft
+  delete erases text; immutable afterwards).
+- **Shared notes API** with optimistic concurrency (`version` required; stale → `409` with the
+  current note). **Not** simultaneous editing — documented as deferred.
+- **Track important changes**: 27 activity actions written by DB triggers (labels only — no
+  notes, emails, file names, paths), actor attribution incl. service-role writes, readable
+  summaries, `GET …/activity` with filters.
+- **Synchronize record updates**: Supabase Realtime Broadcast from the database on private
+  `workspace:<id>` topics, id-only payloads, membership-checked RLS policy on
+  `realtime.messages`, no client publishing; `GET /api/v1/realtime/token` for `setAuth`.
+- **Docs**: created `docs/backend/COLLABORATION.md`; updated `API.md` (§13), `DATABASE.md`,
+  `AUTHENTICATION.md`, `ENVIRONMENT.md` (`APP_URL`), `ARCHITECTURE.md`.
+
+### Files created or modified
+
+- Created: `supabase/migrations/20261025100000_collaboration_services.sql`,
+  `supabase/tests/database/010_collaboration.test.sql`,
+  `src/server/collaboration/{activity,activity-summary,comments,invitations,members,notes,people,realtime}.ts`,
+  `src/shared/contracts/collaboration.ts`,
+  routes `src/app/api/v1/workspaces/[workspaceId]/{members,members/[id],invitations,invitations/[id],notes,notes/[id],notes/[id]/comments,comments/[id],activity}/route.ts`,
+  `src/app/api/v1/{invitations/preview,invitations/accept,realtime/token}/route.ts`,
+  `tests/api/collaboration.spec.ts`, `tests/unit/collaboration.test.ts`, `docs/backend/COLLABORATION.md`.
+- Modified: `src/server/recordings/recordings.ts` (deletion actor), `src/server/core/database.types.ts`,
+  `supabase/tests/database/{001_schema,002_identity,007_rls_special_cases}.test.sql`, `.env.example`, docs.
+
+### Database migrations
+
+| Migration | Applied locally |
+| --- | --- |
+| `20261025100000_collaboration_services` | ✅ |
+
+### Tests executed and results
+
+| Suite | Result |
+| --- | --- |
+| `npm run test:db` (10 files) | ✅ 504/504 (new: 55 collaboration assertions) |
+| `npm run test` (unit + HTTP integration) | ✅ 87/87 (new: 6 unit) |
+| `npx playwright test` (api + chromium) | ✅ 48/48 (new: 7 API incl. live Realtime subscriptions) |
+| `npm run lint`, `npx tsc --noEmit`, `npm run build`, `supabase db lint` | ✅ |
+| Secret scan (client bundle, repo files) | ✅ 0 matches |
+
+Defects found by the tests and fixed:
+
+1. **Existing bug (Phase 3):** `accept_invitation` compared `citext` emails inside a function
+   with `search_path = ''`, where the case-insensitive operator is not resolved, so the check
+   was case-sensitive (an invitation to `Dana@Example.com` could not be accepted by
+   `dana@example.com`). Fixed with explicit lower-cased comparison; the same pattern in the new
+   invitation trigger and preview function.
+2. Test fixtures: inserts with client-supplied comment ids (not granted), deleting members
+   without a workspace filter (hit the user's own personal-workspace owner row).
+
+### Outstanding issues
+
+- Invitation emails (D9) — links only for now.
+- Ownership transfer not implemented (owner cannot leave).
+- Removed members' already-open Realtime connections can receive id-only notifications until
+  their next token refresh (≤ 1 h); data access is revoked immediately.
+- Realtime delivery is best-effort; clients must refetch after reconnecting.
+- `/invite/<token>` page and all collaboration UI are Phase 7.
+- Simultaneous note editing is deferred to a future release.
+
+### Architectural decisions
+
+- Broadcast-from-database with id-only payloads instead of `postgres_changes` (no content
+  ever pushed; no delete-event id leak; API remains the only read path).
+- Activity written by triggers (covers every write path; append-only).
+- D7 table list extended with `shared_notes`, `recordings`, `workspace_members`, `workspaces`.
+
+### Next phase
+
+Phase 7 — Frontend integration — awaiting approval.
 
