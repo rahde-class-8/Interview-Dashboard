@@ -7,7 +7,8 @@ interviews, and share a workspace with collaborators.
 > **Status:** full-stack MVP running locally (Next.js + Supabase). Data, files,
 > sign-in and sharing are real; nothing is deployed yet (Phase 9). The app never
 > records calls or uses the microphone, and has no AI features. See
-> [BACKEND_PROGRESS.md](BACKEND_PROGRESS.md).
+> [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for what it can and can't do today,
+> and [BACKEND_PROGRESS.md](BACKEND_PROGRESS.md) for phase-by-phase progress.
 
 ## Technology stack
 
