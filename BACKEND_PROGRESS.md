@@ -13,7 +13,7 @@ Specification. Statuses: **Not Started / In Progress / Blocked / Complete**.
 | 5 — Recording storage | **Complete** | Authorized uploads and playback work ✅ |
 | 6 — Collaboration | **Complete** | Role-based sharing is enforced ✅ |
 | 7 — Frontend integration | **Complete** | Frontend workflows persist real data ✅ |
-| 8 — Testing and QA | Not Started | Critical security tests pass |
+| 8 — Testing and QA | **Complete** | Critical security tests pass ✅ |
 | 9 — Deployment and operations | Not Started | Security, recovery and deployment checks pass |
 
 ---
@@ -724,5 +724,83 @@ Defects found and fixed:
 
 ### Next phase
 
-Phase 8 — Testing and QA — awaiting approval.
+Phase 8 — Testing and QA — complete (see below).
+
+---
+
+## Phase 8 — Testing and Quality Assurance
+
+**Status:** Complete (2026-10-25). Gate "critical security tests pass": ✅
+(692 tests: pgTAP 505, Vitest 124 = 112 unit + 12 integration, Playwright 63 = 55 API + 8 browser;
+lint, types, `db lint`, build, `npm audit` 0 vulnerabilities).
+
+### Completed tasks
+
+- **Coverage audit** against the specification; requirement → test traceability in
+  `docs/backend/TESTING.md`.
+- **Unit tests** (new 19): permission helpers (`src/lib/permissions.ts`, now used by the UI),
+  business rules (dashboard metrics, overdue rules, follow-ups, intelligence aggregation, call
+  rows, store cascades), browser API client (envelopes, retries, pagination), client
+  validation and date helpers.
+- **Security suite** `tests/api/security.spec.ts`: authorization matrix over all 75 workspace
+  routes for anonymous (401), outsiders (404, incl. foreign ids in their own workspace), viewers
+  and commenters (403 above their role, 200 reads); route-coverage guard (new routes must be
+  listed); commenter upload denial; secrets absent from API responses, served pages and every
+  built JS chunk; security headers.
+- **Repository secret scan** `tests/integration/repository-secrets.test.ts`.
+- **Specification workflow** `tests/e2e/full-workflow.spec.ts`: register (real confirmation
+  email) → log in → opportunity → call → structured notes → upload → play → prep tasks → log out
+  → log in → persistence → unauthorized account denied (UI and API).
+- **Hardening**: security headers (Permissions-Policy disables microphone/camera, framing
+  protection, partial CSP, nosniff, referrer policy, COOP, HSTS, no X-Powered-By); `postcss`
+  advisory fixed via npm override (no Next.js major upgrade).
+- **CI**: `.github/workflows/ci.yml` (all suites against local Supabase on a runner;
+  manual trigger only — not yet executed).
+- **Docs**: created `docs/backend/TESTING.md`, `docs/backend/SECURITY.md`; updated
+  `README.md`, `docs/CURRENT_STATUS.md`.
+
+### Files created or modified
+
+- Created: `tests/unit/{permissions,business-rules,api-client,client-validation}.test.ts`,
+  `tests/unit/fixtures/app-data.ts`, `tests/integration/repository-secrets.test.ts`,
+  `tests/api/security.spec.ts`, `tests/e2e/full-workflow.spec.ts`, `src/lib/permissions.ts`,
+  `.github/workflows/ci.yml`, `docs/backend/{TESTING,SECURITY}.md`.
+- Modified: `next.config.ts` (headers), `package.json` / `package-lock.json` (postcss override),
+  `src/lib/store/permissions.ts`, recording and comment UI (shared permission helpers), docs.
+
+### Database migrations
+
+None.
+
+### Tests executed and results
+
+| Suite | Result |
+| --- | --- |
+| `npm run test:db` | ✅ 505/505 |
+| `npm test` | ✅ 124/124 (112 unit, 12 integration) |
+| `npx playwright test` | ✅ 63/63 (55 API, 8 browser) |
+| `npm run lint`, `npx tsc --noEmit`, `npm run build`, `supabase db lint` | ✅ |
+| `npm audit` | ✅ 0 vulnerabilities |
+
+All seven specification security requirements pass (TESTING.md §4). No application defects were
+found in this phase; the new tests passed against the existing implementation after selector
+fixes in the tests themselves.
+
+### Outstanding issues
+
+- CI workflow not executed yet (manual trigger; requires GitHub Actions).
+- No load/performance tests, cross-browser runs, automated accessibility audit or coverage report.
+- Script-src CSP, hosted configuration, monitoring, backups and job scheduling are Phase 9.
+
+### Architectural decisions
+
+- Permission rules for the UI live in one pure module mirroring the server rules.
+- CI is opt-in to avoid consuming paid minutes without approval.
+- Dependency advisories are fixed with targeted overrides before considering major upgrades.
+
+### Next phase
+
+Phase 9 — Deployment and operations — awaiting approval. Requires decisions/approval for:
+hosted Supabase projects (staging, production), Vercel project, email provider (D9), domain,
+and any paid plans.
 

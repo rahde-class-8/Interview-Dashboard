@@ -40,6 +40,10 @@ http://127.0.0.1:54324. Full setup and troubleshooting:
 | `npm run test:db` | pgTAP database and RLS tests |
 | `npm test` | Vitest unit + HTTP integration tests |
 | `npx playwright test` | API (`tests/api`) and browser (`tests/e2e`) tests |
+| `npm audit` | Dependency vulnerabilities (0 at last check) |
+
+Test strategy, requirement traceability and results: [docs/backend/TESTING.md](docs/backend/TESTING.md).
+Security model: [docs/backend/SECURITY.md](docs/backend/SECURITY.md).
 | `npm run db:reset` / `db:types` | Rebuild local DB (discards data) / regenerate types |
 
 ## Application structure
@@ -59,7 +63,8 @@ src/
 ├── shared/contracts/     # zod schemas + types shared by API and UI
 └── types/                # UI domain models
 supabase/                 # migrations, pgTAP tests, config, email templates
-docs/backend/             # architecture, database, auth, API, storage, collaboration, frontend
+docs/backend/             # architecture, database, auth, API, storage, collaboration, frontend,
+                          #   testing, security
 ```
 
 How the UI talks to the backend: [docs/backend/FRONTEND_INTEGRATION.md](docs/backend/FRONTEND_INTEGRATION.md).

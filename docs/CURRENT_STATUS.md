@@ -1,11 +1,13 @@
 # Current Status: What the App Can and Can't Do
 
-_Last updated: 2026-10-25, after backend Phase 7 (frontend integration)._
+_Last updated: 2026-10-25, after backend Phase 8 (testing and QA)._
 
 **Short answer:** the application works end to end, but **only on a developer machine**.
 Nothing is deployed, so there is no URL to open or share yet. Everything listed under
-[What it can do](#what-it-can-do) is implemented and covered by automated tests (pgTAP,
-Vitest, Playwright API and browser tests), running against a local Supabase stack.
+[What it can do](#what-it-can-do) is implemented and covered by 692 automated tests (pgTAP,
+Vitest, Playwright API and browser tests) running against a local Supabase stack, including
+every security test required by the specification — see [backend/TESTING.md](backend/TESTING.md)
+and [backend/SECURITY.md](backend/SECURITY.md).
 
 Detailed progress per phase: [BACKEND_PROGRESS.md](../BACKEND_PROGRESS.md).
 
@@ -97,12 +99,15 @@ Full setup and troubleshooting: [backend/ENVIRONMENT.md](backend/ENVIRONMENT.md)
 * **As a personal tool on your own computer:** fully functional today.
 * **To use it from anywhere or share it with others:** it needs deployment (Phase 9) and an
   email provider (D9).
-* **Before trusting it with real recruiter data:** complete the Phase 8 security and QA pass.
+* **Before trusting it with real recruiter data in production:** the Phase 8 security and QA
+  pass is complete; the remaining hardening items (content security policy for scripts,
+  hosted configuration, monitoring, backups) are part of Phase 9 — see
+  [backend/SECURITY.md](backend/SECURITY.md) §7.
 
 ## Roadmap
 
 | Phase | Status |
 | --- | --- |
 | 0–7 — Architecture, environment, database, auth, API, storage, collaboration, frontend integration | Complete |
-| 8 — Testing and QA (security tests, full end-to-end workflow) | Not started |
+| 8 — Testing and QA (security tests, full end-to-end workflow) | Complete |
 | 9 — Deployment and operations (Vercel + Supabase, staging/production, monitoring, backups, job scheduling) | Not started |

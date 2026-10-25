@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/toaster";
 import { ApiClientError, errorMessage } from "@/lib/api/client";
 import { formatDate, formatDateTime, formatFileSize, formatSeconds } from "@/lib/format";
 import { useAppStore } from "@/lib/store/app-store";
+import { canDeleteRecording } from "@/lib/permissions";
 import { usePermissions } from "@/lib/store/permissions";
 import { getCallRecordings } from "@/lib/store/selectors";
 import { useActions } from "@/lib/store/use-actions";
@@ -270,12 +271,12 @@ function UploadStatus({ state, onCancel, onDismiss }: { state: UploadState; onCa
 
 function RecordingItem({ recording }: { recording: RecordingAttachment }) {
   const { data } = useAppStore();
-  const { canEdit, canPlayRecordings, isOwner } = usePermissions();
+  const { canEdit, canPlayRecordings, role } = usePermissions();
   const actions = useActions();
   const upload = useUpload(recording.callId);
   const extension = recording.fileName.split(".").pop()?.toUpperCase() ?? "AUDIO";
   const isUploader = recording.uploadedBy === data.currentUser.id;
-  const canDelete = isOwner || (canEdit && isUploader);
+  const canDelete = canDeleteRecording(role, isUploader);
   const uploading = upload.state.phase !== "idle" && upload.state.phase !== "error";
 
   return (

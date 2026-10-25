@@ -1,0 +1,73 @@
+# Full test suite: lint, types, unit, database (pgTAP), API and browser tests
+# against a local Supabase stack started inside the runner (no cloud resources).
+#
+# Manual trigger only, so it does not consume GitHub Actions minutes without
+# approval. To run it on every pull request, add:
+#   pull_request:
+#     branches: [main]
+# See docs/backend/TESTING.md.
+name: CI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Static checks
+        run: |
+          npm run lint
+          npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Start local Supabase
+        run: npx supabase start -x edge-runtime,imgproxy,vector,logflare,supavisor
+
+      - name: Write local environment (.env.local, never committed)
+        run: npm run env:local
+
+      - name: Database tests (pgTAP)
+        run: npm run test:db
+
+      - name: Integration tests
+        run: npm run test:integration
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: API and browser tests
+        run: npx playwright test
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
+
+      - name: Stop Supabase
+        if: always()
+        run: npx supabase stop

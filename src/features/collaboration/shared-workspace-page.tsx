@@ -22,6 +22,7 @@ import { ApiClientError } from "@/lib/api/client";
 import { formatDate, formatDateTime, initials } from "@/lib/format";
 import { useMutation, useSubmit } from "@/lib/hooks/use-submit";
 import { useAppStore } from "@/lib/store/app-store";
+import { commentPermissions } from "@/lib/permissions";
 import { ROLE_LABELS, usePermissions } from "@/lib/store/permissions";
 import { findById, sortByDateAsc, sortByDateDesc } from "@/lib/store/selectors";
 import { useActions } from "@/lib/store/use-actions";
@@ -343,13 +344,14 @@ function Comments({ note }: { note: SharedNote }) {
 
 function CommentItem({ comment }: { comment: Comment }) {
   const { data } = useAppStore();
-  const { canComment, isOwner } = usePermissions();
+  const { role } = usePermissions();
   const { editComment, deleteComment } = useActions();
   const mutate = useMutation();
   const submit = useSubmit();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.body);
   const mine = comment.authorId === data.currentUser.id;
+  const allowed = commentPermissions(role, mine);
 
   if (comment.deleted) {
     return <li className="text-sm text-muted-foreground italic">Comment deleted.</li>;
@@ -400,7 +402,7 @@ function CommentItem({ comment }: { comment: Comment }) {
       </div>
       {!editing && (
         <div className="flex shrink-0">
-          {mine && canComment && (
+          {allowed.canEdit && (
             <Button
               variant="ghost"
               size="icon-sm"
@@ -413,7 +415,7 @@ function CommentItem({ comment }: { comment: Comment }) {
               <Pencil />
             </Button>
           )}
-          {((mine && canComment) || isOwner) && (
+          {allowed.canDelete && (
             <Button variant="ghost" size="icon-sm" aria-label="Delete comment" onClick={() => void mutate(() => deleteComment(comment.id), "Comment deleted")}>
               <Trash2 />
             </Button>
